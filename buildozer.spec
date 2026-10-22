@@ -42,7 +42,7 @@ version = 0.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy==2.3.1,kivymd==2.0.0
+requirements = python3==3.11.9,kivy==2.3.0,cython==0.29.36
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -119,7 +119,7 @@ android.minapi = 24
 #android.sdk = 20
 
 # (str) Android NDK version to use
-android.ndk = 26b
+android.ndk = 25b
 
 # (int) Android NDK API to use. This is the minimum API your app will support, it should usually match android.minapi.
 #android.ndk_api = 21
@@ -214,7 +214,7 @@ android.accept_sdk_license = True
 
 # (bool) Enable AndroidX support. Enable when 'android.gradle_dependencies'
 # contains an 'androidx' package, or any package from Kotlin source.
-# android.enable_androidx requires android.api >= 28
+# android.enable_androidx requires android.api = 33
 #android.enable_androidx = True
 
 # (list) add java compile options
@@ -292,7 +292,7 @@ android.accept_sdk_license = True
 
 # (list) The Android archs to build for, choices: armeabi-v7a, arm64-v8a, x86, x86_64
 # In past, was `android.arch` as we weren't supporting builds for multiple archs at the same time.
-android.archs = arm64-v8a, armeabi-v7a
+android.archs = arm64-v8a
 
 # (int) overrides automatic versionCode computation (used in build.gradle)
 # this is not the same as app version and should only be edited if you know what you're doing
