@@ -1,11 +1,10 @@
-# main.py — Cat Training Coach
+# main.py — Cat Training Coach (KivyMD 1.2.0)
 from kivy.clock import Clock
 from kivy.metrics import dp
 from kivy.uix.image import Image
 from kivy.uix.floatlayout import FloatLayout
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
-from kivymd.uix.screenmanager import MDScreenManager
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.label import MDLabel
@@ -13,6 +12,7 @@ from kivymd.uix.button import MDRaisedButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.selectioncontrol import MDCheckbox
 from kivymd.uix.scrollview import MDScrollView
+from kivymd.uix.bottomnavigation import MDBottomNavigation, MDBottomNavigationItem
 from kivy.storage.jsonstore import JsonStore
 from datetime import datetime, date
 import random
@@ -113,9 +113,7 @@ PROGRAM = [
      "success":"7 из 10 - кот садится на жест"},
     {"day":6,"week":1,"level":"Контакт","title":"Сидеть в разных местах",
      "goal":"Команда работает в разных местах","sessions":3,"minutes":"3 мин",
-     "steps":["Сессия 1 - кухня.",
-              "Сессия 2 - комната.",
-              "Сессия 3 - у окна.",
+     "steps":["Сессия 1 - кухня.","Сессия 2 - комната.","Сессия 3 - у окна.",
               "5-7 повторов в каждом месте."],
      "success":"Кот садится в 2 разных местах"},
     {"day":7,"week":1,"level":"Контакт","title":"Отдых",
@@ -124,8 +122,7 @@ PROGRAM = [
      "success":"Кот стабильно садится"},
     {"day":8,"week":2,"level":"Базовые команды","title":"Дай лапу - знакомство",
      "goal":"Кот трогает ладонь лапой","sessions":3,"minutes":"3 мин",
-     "steps":["Сядь на пол. Лакомство в кулак.",
-              "Кулак на пол перед котом.",
+     "steps":["Сядь на пол. Лакомство в кулак.","Кулак на пол перед котом.",
               "Нос - игнор. Лапа - КЛИК - открой ладонь.",
               "10 попыток за сессию."],
      "success":"Кот тронул ладонь лапой хотя бы раз"},
@@ -133,15 +130,13 @@ PROGRAM = [
      "goal":"Кот даёт лапу по слову","sessions":3,"minutes":"3 мин",
      "steps":["Скажи Дай лапу ОДИН раз.",
               "Держи кулак на уровне груди кота.",
-              "Нос - игнор. Лапа - клик - лакомство.",
-              "10-12 повторов."],
+              "Нос - игнор. Лапа - клик - лакомство.","10-12 повторов."],
      "success":"3-4 раза из 10 кот трогает ладонь лапой"},
     {"day":10,"week":2,"level":"Базовые команды","title":"Дай лапу - держи",
      "goal":"Кот держит лапу 1 секунду","sessions":3,"minutes":"3 мин",
      "steps":["Дай лапу + открытая ладонь.",
               "Кот положил лапу - закрой ладонь.",
-              "Считай до 1. Клик - открой - лакомство.",
-              "8-10 повторов."],
+              "Считай до 1. Клик - открой - лакомство.","8-10 повторов."],
      "success":"Кот держит лапу 1 сек 3 раза из 5"},
     {"day":11,"week":2,"level":"Базовые команды","title":"Дай лапу - пустая рука",
      "goal":"Кот даёт лапу без лакомства","sessions":3,"minutes":"3 мин",
@@ -151,17 +146,14 @@ PROGRAM = [
      "success":"5 из 10 - даёт лапу на пустую руку"},
     {"day":12,"week":2,"level":"Базовые команды","title":"Цепочка Сидеть+Дай лапу",
      "goal":"Кот делает 2 команды подряд","sessions":3,"minutes":"3 мин",
-     "steps":["Сидеть - сел - клик - лакомство.",
-              "Пауза 1 сек.",
-              "Дай лапу - дал - клик - лакомство.",
-              "5-7 цепочек."],
+     "steps":["Сидеть - сел - клик - лакомство.","Пауза 1 сек.",
+              "Дай лапу - дал - клик - лакомство.","5-7 цепочек."],
      "success":"Цепочка 3 раза из 5"},
     {"day":13,"week":2,"level":"Базовые команды","title":"Другой человек",
      "goal":"Кот даёт лапу другому","sessions":2,"minutes":"3 мин",
      "steps":["Позови члена семьи.",
               "Он говорит Дай лапу + показывает руку.",
-              "Кот дал - клик - лакомство (даёте вы).",
-              "7-10 повторов."],
+              "Кот дал - клик - лакомство (даёте вы).","7-10 повторов."],
      "success":"Кот даёт лапу другому 3 раза"},
     {"day":14,"week":2,"level":"Базовые команды","title":"Отдых",
      "goal":"Закрепить 2 команды","sessions":2,"minutes":"2 мин",
@@ -181,8 +173,7 @@ PROGRAM = [
      "goal":"Кот ложится","sessions":3,"minutes":"3 мин",
      "steps":["Кот сидит. Лакомство в руке.",
               "Веди руку от носа вниз по полу.",
-              "Локти на полу - клик - лакомство.",
-              "8-10 повторов."],
+              "Локти на полу - клик - лакомство.","8-10 повторов."],
      "success":"Кот ложится 3 раза из 5"},
     {"day":18,"week":3,"level":"Трюки","title":"Лежать + слово",
      "goal":"Кот ложится по слову","sessions":3,"minutes":"3 мин",
@@ -193,22 +184,18 @@ PROGRAM = [
     {"day":19,"week":3,"level":"Трюки","title":"Ко мне + Сидеть",
      "goal":"Кот подходит и садится","sessions":3,"minutes":"3 мин",
      "steps":["Ко мне - подошёл - клик - лакомство.",
-              "Сразу Сидеть - сел - клик - лакомство.",
-              "5-7 цепочек."],
+              "Сразу Сидеть - сел - клик - лакомство.","5-7 цепочек."],
      "success":"Цепочка 3 раза из 5"},
     {"day":20,"week":3,"level":"Трюки","title":"Лежать из Сидеть",
      "goal":"Кот садится - ложится","sessions":3,"minutes":"3 мин",
-     "steps":["Сидеть - сел - клик.",
-              "Лежать - лёг - клик.","5-7 цепочек."],
+     "steps":["Сидеть - сел - клик.","Лежать - лёг - клик.","5-7 цепочек."],
      "success":"3 раза из 5"},
     {"day":21,"week":3,"level":"Трюки","title":"Отдых",
      "goal":"Закрепить 4 команды","sessions":2,"minutes":"2 мин",
-     "steps":["Все 4 команды по 3 раза."],
-     "success":"Все команды узнаются"},
+     "steps":["Все 4 команды по 3 раза."],"success":"Все команды узнаются"},
     {"day":22,"week":4,"level":"Трюки","title":"Зайка - подъём",
      "goal":"Кот встаёт на задние лапы","sessions":3,"minutes":"3 мин",
-     "steps":["Лакомство чуть выше головы.",
-              "Кот тянется - встаёт.",
+     "steps":["Лакомство чуть выше головы.","Кот тянется - встаёт.",
               "Клик - лакомство.","8-10 повторов."],
      "success":"Кот встаёт 3 раза из 5"},
     {"day":23,"week":4,"level":"Трюки","title":"Зайка + слово",
@@ -289,18 +276,18 @@ PROGRAM = [
      "success":"Не убирает лапу"},
     {"day":37,"week":6,"level":"Мастер","title":"Когти - нажим",
      "goal":"Кот позволяет показать коготь","sessions":3,"minutes":"3 мин",
-     "steps":["Нажми на пальцы - коготь вышел.",
-              "Клик - лакомство.","8-10 повторов."],
+     "steps":["Нажми на пальцы - коготь вышел.","Клик - лакомство.",
+              "8-10 повторов."],
      "success":"Позволяет показать коготь"},
     {"day":38,"week":6,"level":"Мастер","title":"Когти - когтерез рядом",
      "goal":"Кот не боится когтереза","sessions":3,"minutes":"3 мин",
-     "steps":["Когтерез в руке рядом с лапой.",
-              "Клик - лакомство.","Не режем пока!"],
+     "steps":["Когтерез в руке рядом с лапой.","Клик - лакомство.",
+              "Не режем пока!"],
      "success":"Спокоен при виде когтереза"},
     {"day":39,"week":6,"level":"Мастер","title":"Когти - один",
      "goal":"Стрижём один коготь","sessions":3,"minutes":"3 мин",
-     "steps":["Покажи коготь - отрежь кончик.",
-              "Клик - лакомство.","1 коготь за сессию."],
+     "steps":["Покажи коготь - отрежь кончик.","Клик - лакомство.",
+              "1 коготь за сессию."],
      "success":"Спокойно переносит стрижку"},
     {"day":40,"week":6,"level":"Мастер","title":"Когти - два",
      "goal":"Стрижём 2 когтя","sessions":3,"minutes":"3 мин",
@@ -315,8 +302,7 @@ PROGRAM = [
      "goal":"Показать всё","sessions":1,"minutes":"5 мин",
      "steps":["Сидеть - Дай лапу - Ко мне.",
               "Лежать - Зайка - Кувырок.",
-              "Переноска 30 сек.",
-              "Стрижка 1 когтя.",
+              "Переноска 30 сек.","Стрижка 1 когтя.",
               "Финальная награда!"],
      "success":"Вы — выпускник курса!"},
 ]
@@ -367,10 +353,8 @@ def load_state():
         "clicker_count": 0, "theme": "night",
     }
 
-
 def save_state(state):
     STORE.put("state", **state)
-
 
 def get_rank(points):
     rank = RANKS[0][1]
@@ -379,7 +363,6 @@ def get_rank(points):
             rank = name
     return rank
 
-
 def get_program_day(state):
     try:
         start = datetime.strptime(state["start_date"], "%Y-%m-%d").date()
@@ -387,7 +370,6 @@ def get_program_day(state):
         start = date.today()
     delta = (date.today() - start).days + 1
     return max(1, min(delta, len(PROGRAM)))
-
 
 def get_day_info(num):
     for d in PROGRAM:
@@ -409,7 +391,6 @@ class TodayScreen(MDScreen):
     def refresh(self):
         self.box.clear_widgets()
         s = self.app.state
-
         if not s["cat_name"]:
             self.box.add_widget(MDLabel(
                 text="Настройте профиль кота на вкладке Профиль",
@@ -481,10 +462,103 @@ class TodayScreen(MDScreen):
                                       hint_text="Как прошло?")
         self.box.add_widget(self.note_field)
 
-        btn = MDRaisedButton(style="elevated", pos_hint={"center_x": 0.5})
-        btn.add_widget(MDButtonText(text="Сохранить заметку"))
+        btn = MDRaisedButton(text="Сохранить заметку", pos_hint={"center_x": 0.5})
         btn.bind(on_release=lambda x: self.app.save_note(self.note_field.text))
         self.box.add_widget(btn)
+
+
+class ClickerScreen(MDScreen):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        box = MDBoxLayout(orientation="vertical", padding=dp(12), spacing=dp(10))
+
+        box.add_widget(MDLabel(
+            text="КЛИКЕР", halign="center", bold=True,
+            theme_text_color="Custom", text_color=AC,
+            size_hint_y=None, height=dp(60)))
+
+        self.btn = MDRaisedButton(
+            text="КЛИК",
+            size_hint=(None, None), size=(dp(220), dp(120)),
+            pos_hint={"center_x": 0.5})
+        self.btn.bind(on_release=self.do_click)
+        box.add_widget(self.btn)
+
+        self.counter = MDLabel(
+            text="Всего кликов: 0", halign="center", bold=True,
+            theme_text_color="Custom", text_color=AC,
+            size_hint_y=None, height=dp(40))
+        box.add_widget(self.counter)
+
+        rst = MDRaisedButton(text="Сбросить", pos_hint={"center_x": 0.5})
+        rst.bind(on_release=self.reset_counter)
+        box.add_widget(rst)
+
+        scroll = MDScrollView()
+        info = MDLabel(
+            text=CLICKER_INFO, size_hint_y=None,
+            theme_text_color="Custom", text_color=TC)
+        info.bind(texture_size=lambda inst, val: setattr(inst, "height", val[1]))
+        scroll.add_widget(info)
+        box.add_widget(scroll)
+        self.add_widget(box)
+
+    def refresh(self):
+        self.counter.text = f"Всего кликов: {self.app.state['clicker_count']}"
+
+    def do_click(self, *args):
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            Context = autoclass("android.content.Context")
+            activity = PythonActivity.mActivity
+            vibrator = activity.getSystemService(Context.VIBRATOR_SERVICE)
+            vibrator.vibrate(60)
+        except Exception:
+            pass
+        self.app.state["clicker_count"] += 1
+        save_state(self.app.state)
+        self.refresh()
+
+    def reset_counter(self, *args):
+        self.app.state["clicker_count"] = 0
+        save_state(self.app.state)
+        self.refresh()
+
+
+class ProgramScreen(MDScreen):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.scroll = MDScrollView()
+        self.box = MDBoxLayout(orientation="vertical", padding=dp(12),
+                               spacing=dp(4), size_hint_y=None)
+        self.box.bind(minimum_height=self.box.setter("height"))
+        self.scroll.add_widget(self.box)
+        self.add_widget(self.scroll)
+
+    def refresh(self):
+        self.box.clear_widgets()
+        current = get_program_day(self.app.state)
+        last_week = None
+
+        for d in PROGRAM:
+            if d["week"] != last_week:
+                self.box.add_widget(MDLabel(
+                    text=f"НЕДЕЛЯ {d['week']} - {d['level']}",
+                    bold=True,
+                    theme_text_color="Custom", text_color=AC,
+                    size_hint_y=None, height=dp(32)))
+                last_week = d["week"]
+
+            done = d["day"] in self.app.state["completed_days"]
+            mark = "[X]" if done else "[ ]"
+            today_mark = " СЕГОДНЯ" if d["day"] == current else ""
+
+            btn = MDRaisedButton(
+                text=f"{mark} День {d['day']}: {d['title']}{today_mark}",
+                size_hint_x=1, size_hint_y=None, height=dp(40))
+            btn.bind(on_release=lambda x, day=d: self.app.open_day(day))
+            self.box.add_widget(btn)
 
 
 class DayDetailScreen(MDScreen):
@@ -499,8 +573,7 @@ class DayDetailScreen(MDScreen):
 
     def show(self, day):
         self.box.clear_widgets()
-        back = MDButton(style="text")
-        back.add_widget(MDButtonText(text="<- Назад"))
+        back = MDRaisedButton(text="<- Назад")
         back.bind(on_release=lambda x: self.app.switch("program"))
         self.box.add_widget(back)
 
@@ -534,105 +607,6 @@ class DayDetailScreen(MDScreen):
             text=f"Критерий: {day['success']}", bold=True,
             theme_text_color="Custom", text_color=(0.65, 0.89, 0.63, 1)))
         self.box.add_widget(card)
-
-
-class ProgramScreen(MDScreen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.scroll = MDScrollView()
-        self.box = MDBoxLayout(orientation="vertical", padding=dp(12),
-                               spacing=dp(4), size_hint_y=None)
-        self.box.bind(minimum_height=self.box.setter("height"))
-        self.scroll.add_widget(self.box)
-        self.add_widget(self.scroll)
-
-    def refresh(self):
-        self.box.clear_widgets()
-        current = get_program_day(self.app.state)
-        last_week = None
-
-        for d in PROGRAM:
-            if d["week"] != last_week:
-                self.box.add_widget(MDLabel(
-                    text=f"НЕДЕЛЯ {d['week']} - {d['level']}",
-                    bold=True,
-                    theme_text_color="Custom", text_color=AC,
-                    size_hint_y=None, height=dp(32)))
-                last_week = d["week"]
-
-            done = d["day"] in self.app.state["completed_days"]
-            mark = "[X]" if done else "[ ]"
-            today_mark = " СЕГОДНЯ" if d["day"] == current else ""
-
-            btn = MDRaisedButton(style="text", size_hint_x=1,
-                           size_hint_y=None, height=dp(40))
-            btn.add_widget(MDButtonText(
-                text=f"{mark} День {d['day']}: {d['title']}{today_mark}"))
-            btn.bind(on_release=lambda x, day=d: self.app.open_day(day))
-            self.box.add_widget(btn)
-
-
-class ClickerScreen(MDScreen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        box = MDBoxLayout(orientation="vertical", padding=dp(12), spacing=dp(10))
-
-        box.add_widget(MDLabel(
-            text="КЛИКЕР", halign="center", bold=True,
-            theme_text_color="Custom", text_color=AC,
-            size_hint_y=None, height=dp(60)))
-
-        self.btn = MDRaisedButton(
-            style="filled",
-            size_hint=(None, None), size=(dp(220), dp(120)),
-            pos_hint={"center_x": 0.5})
-        self.btn.add_widget(MDButtonText(text="КЛИК"))
-        self.btn.bind(on_release=self.do_click)
-        box.add_widget(self.btn)
-
-        self.counter = MDLabel(
-            text="Всего кликов: 0", halign="center", bold=True,
-            theme_text_color="Custom", text_color=AC,
-            size_hint_y=None, height=dp(40))
-        box.add_widget(self.counter)
-
-        rst = MDButton(style="text", pos_hint={"center_x": 0.5},
-                       size_hint=(None, None), size=(dp(200), dp(40)))
-        rst.add_widget(MDButtonText(text="Сбросить"))
-        rst.bind(on_release=self.reset_counter)
-        box.add_widget(rst)
-
-        scroll = MDScrollView()
-        info = MDLabel(
-            text=CLICKER_INFO, size_hint_y=None,
-            theme_text_color="Custom", text_color=TC)
-        info.bind(texture_size=lambda inst, val: setattr(inst, "height", val[1]))
-        scroll.add_widget(info)
-        box.add_widget(scroll)
-        self.add_widget(box)
-
-    def refresh(self):
-        self.counter.text = f"Всего кликов: {self.app.state['clicker_count']}"
-
-    def do_click(self, *args):
-        try:
-            from jnius import autoclass
-            PythonActivity = autoclass("org.kivy.android.PythonActivity")
-            Context = autoclass("android.content.Context")
-            activity = PythonActivity.mActivity
-            vibrator = activity.getSystemService(Context.VIBRATOR_SERVICE)
-            vibrator.vibrate(60)
-        except Exception:
-            pass
-
-        self.app.state["clicker_count"] += 1
-        save_state(self.app.state)
-        self.refresh()
-
-    def reset_counter(self, *args):
-        self.app.state["clicker_count"] = 0
-        save_state(self.app.state)
-        self.refresh()
 
 
 class RewardsScreen(MDScreen):
@@ -704,8 +678,7 @@ class DiagScreen(MDScreen):
                            height=dp(40), spacing=dp(4))
         for text, key in [("Стоп", "stops"), ("Причины", "reasons"),
                           ("Команды", "commands"), ("Мудрость", "phil")]:
-            b = MDButton(style="text")
-            b.add_widget(MDButtonText(text=text))
+            b = MDRaisedButton(text=text)
             b.bind(on_release=lambda x, k=key: self.show(k))
             row1.add_widget(b)
         box.add_widget(row1)
@@ -769,8 +742,7 @@ class ProfileScreen(MDScreen):
         self.name_field = MDTextField(text=s["cat_name"], hint_text="Имя кота")
         self.box.add_widget(self.name_field)
 
-        btn = MDRaisedButton(style="elevated", pos_hint={"center_x": 0.5})
-        btn.add_widget(MDButtonText(text="Сохранить"))
+        btn = MDRaisedButton(text="Сохранить", pos_hint={"center_x": 0.5})
         btn.bind(on_release=lambda x: self.app.save_profile(self.name_field.text))
         self.box.add_widget(btn)
 
@@ -806,27 +778,28 @@ class CatTrainingApp(MDApp):
         root_layer = FloatLayout()
 
         self.bg_layer = FloatLayout()
-        for i in range(6):
-            for j in range(10):
-                cat = Image(
-                    source="cats_bg.png",
-                    size_hint=(None, None),
-                    size=(dp(90), dp(90)),
-                    pos=(i * dp(70) - dp(20), j * dp(90) - dp(20)),
-                    opacity=0.35,
-                )
-                self.bg_layer.add_widget(cat)
-        root_layer.add_widget(self.bg_layer)
-
-        root = MDBoxLayout(orientation="vertical")
+        try:
+            for i in range(6):
+                for j in range(10):
+                    cat = Image(
+                        source="cats_bg.png",
+                        size_hint=(None, None),
+                        size=(dp(90), dp(90)),
+                        pos=(i * dp(70) - dp(20), j * dp(90) - dp(20)),
+                        opacity=0.35,
+                    )
+                    self.bg_layer.add_widget(cat)
+            root_layer.add_widget(self.bg_layer)
+        except Exception:
+            pass
 
         self.top_label = MDLabel(
             text="", size_hint_y=None, height=dp(36),
             halign="center",
             theme_text_color="Custom", text_color=self.ac)
-        root.add_widget(self.top_label)
+        
+        self.bottom_nav = MDBottomNavigation()
 
-        self.sm = MDScreenManager()
         self.screens = {
             "today": TodayScreen(name="today"),
             "clicker": ClickerScreen(name="clicker"),
@@ -838,58 +811,28 @@ class CatTrainingApp(MDApp):
         }
         for scr in self.screens.values():
             scr.app = self
-            self.sm.add_widget(scr)
-        root.add_widget(self.sm)
+            item = MDBottomNavigationItem(name=scr.name, text=scr.name.capitalize())
+            item.add_widget(scr)
+            self.bottom_nav.add_widget(item)
 
-        nav_scroll = MDScrollView(
-            size_hint_y=None,
-            height=dp(56),
-            do_scroll_x=True,
-            do_scroll_y=False,
-        )
-        nav_row = MDBoxLayout(
-            orientation="horizontal",
-            size_hint_x=None,
-            height=dp(56),
-            spacing=dp(4),
-            padding=dp(4),
-        )
-        nav_row.bind(minimum_width=nav_row.setter("width"))
-        items = [
-            ("Сегодня", "today"),
-            ("Кликер", "clicker"),
-            ("Программа", "program"),
-            ("Звания", "rewards"),
-            ("Помощь", "diag"),
-            ("Профиль", "profile"),
-        ]
-        for text, key in items:
-            btn = MDRaisedButton(
-                style="text",
-                size_hint=(None, None),
-                size=(dp(85), dp(44)),
-            )
-            btn.add_widget(MDButtonText(text=text, font_size=dp(11)))
-            btn.bind(on_release=lambda x, k=key: self.switch(k))
-            nav_row.add_widget(btn)
-        nav_scroll.add_widget(nav_row)
-        root.add_widget(nav_scroll)
-
-        root_layer.add_widget(root)
+        main_box = MDBoxLayout(orientation="vertical")
+        main_box.add_widget(self.top_label)
+        main_box.add_widget(self.bottom_nav)
+        root_layer.add_widget(main_box)
 
         self.switch("today")
         Clock.schedule_interval(self.update_fact, 30)
         return root_layer
 
     def switch(self, name):
-        self.sm.current = name
+        self.bottom_nav.switch_tab(name)
         if name in self.screens:
             self.screens[name].refresh()
         self.update_top()
 
     def open_day(self, day):
         self.screens["day_detail"].show(day)
-        self.sm.current = "day_detail"
+        self.bottom_nav.switch_tab("day_detail")
 
     def update_top(self):
         s = self.state
