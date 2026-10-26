@@ -9,7 +9,7 @@ from kivymd.uix.screenmanager import MDScreenManager
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.label import MDLabel
-from kivymd.uix.button import MDButton, MDButtonText
+from kivymd.uix.button import MDRaisedButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.selectioncontrol import MDCheckbox
 from kivymd.uix.scrollview import MDScrollView
@@ -481,7 +481,7 @@ class TodayScreen(MDScreen):
                                       hint_text="Как прошло?")
         self.box.add_widget(self.note_field)
 
-        btn = MDButton(style="elevated", pos_hint={"center_x": 0.5})
+        btn = MDRaisedButton(style="elevated", pos_hint={"center_x": 0.5})
         btn.add_widget(MDButtonText(text="Сохранить заметку"))
         btn.bind(on_release=lambda x: self.app.save_note(self.note_field.text))
         self.box.add_widget(btn)
@@ -564,7 +564,7 @@ class ProgramScreen(MDScreen):
             mark = "[X]" if done else "[ ]"
             today_mark = " СЕГОДНЯ" if d["day"] == current else ""
 
-            btn = MDButton(style="text", size_hint_x=1,
+            btn = MDRaisedButton(style="text", size_hint_x=1,
                            size_hint_y=None, height=dp(40))
             btn.add_widget(MDButtonText(
                 text=f"{mark} День {d['day']}: {d['title']}{today_mark}"))
@@ -582,7 +582,7 @@ class ClickerScreen(MDScreen):
             theme_text_color="Custom", text_color=AC,
             size_hint_y=None, height=dp(60)))
 
-        self.btn = MDButton(
+        self.btn = MDRaisedButton(
             style="filled",
             size_hint=(None, None), size=(dp(220), dp(120)),
             pos_hint={"center_x": 0.5})
@@ -769,7 +769,7 @@ class ProfileScreen(MDScreen):
         self.name_field = MDTextField(text=s["cat_name"], hint_text="Имя кота")
         self.box.add_widget(self.name_field)
 
-        btn = MDButton(style="elevated", pos_hint={"center_x": 0.5})
+        btn = MDRaisedButton(style="elevated", pos_hint={"center_x": 0.5})
         btn.add_widget(MDButtonText(text="Сохранить"))
         btn.bind(on_release=lambda x: self.app.save_profile(self.name_field.text))
         self.box.add_widget(btn)
@@ -864,7 +864,7 @@ class CatTrainingApp(MDApp):
             ("Профиль", "profile"),
         ]
         for text, key in items:
-            btn = MDButton(
+            btn = MDRaisedButton(
                 style="text",
                 size_hint=(None, None),
                 size=(dp(85), dp(44)),
