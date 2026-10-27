@@ -17,6 +17,7 @@ from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.metrics import dp, sp
 from kivy.storage.jsonstore import JsonStore
+from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
@@ -935,8 +936,10 @@ class TabButton(ButtonBehavior, BoxLayout):
             font_size=sp(24),
             theme_text_color="Custom",
             text_color=GREY,
-            size_hint_y=0.6,
         )
+        # Контейнер центрирует иконку по ширине вкладки
+        icon_box = AnchorLayout(anchor_x="center", anchor_y="center", size_hint_y=0.6)
+        icon_box.add_widget(self.icon)
         self.caption = Label(
             text=title,
             font_size=sp(10),
@@ -946,7 +949,7 @@ class TabButton(ButtonBehavior, BoxLayout):
             size_hint_y=0.4,
         )
         self.caption.bind(size=lambda inst, s: setattr(inst, "text_size", s))
-        self.add_widget(self.icon)
+        self.add_widget(icon_box)
         self.add_widget(self.caption)
 
     def set_active(self, active):
