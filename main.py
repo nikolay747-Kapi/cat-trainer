@@ -1,29 +1,57 @@
-# main.py — Cat Training Coach (KivyMD 1.2.0)
-from kivy.clock import Clock
-from kivy.metrics import dp
-from kivy.uix.image import Image
-from kivy.uix.floatlayout import FloatLayout
-from kivymd.app import MDApp
-from kivymd.uix.screen import MDScreen
-from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.card import MDCard
-from kivymd.uix.label import MDLabel
-from kivymd.uix.button import MDRaisedButton
-from kivymd.uix.textfield import MDTextField
-from kivymd.uix.selectioncontrol import MDCheckbox
-from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.bottomnavigation import MDBottomNavigation, MDBottomNavigationItem
-from kivy.storage.jsonstore import JsonStore
-from datetime import datetime, date
+# -*- coding: utf-8 -*-
+"""
+Cat Training Coach - приложение для дрессировки кота (Android, Kivy 2.3.1 + KivyMD 1.2.0).
+
+Что изменено по сравнению с прошлой сборкой:
+- Вместо MDBottomNavigation (он обрезает вкладки, когда их больше 5 на узком экране)
+  сделана собственная нижняя панель из 6 равных кнопок + ScreenManager.
+  Теперь все 6 вкладок всегда видны.
+- Все тексты переносятся по ширине экрана и прокручиваются.
+"""
+
+import os
 import random
+from datetime import date, timedelta
 
-DATA_FILE = "cat_training_data.json"
-STORE = JsonStore(DATA_FILE)
+from kivy.clock import Clock
+from kivy.core.window import Window
+from kivy.metrics import dp, sp
+from kivy.storage.jsonstore import JsonStore
+from kivy.uix.behaviors import ButtonBehavior
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.image import Image
+from kivy.uix.label import Label
+from kivy.uix.screenmanager import NoTransition, ScreenManager
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.widget import Widget
+from kivy.utils import platform
 
-TC = (0.88, 0.88, 0.88, 1)
-AC = (0.80, 0.65, 0.97, 1)
-CC = (0.10, 0.10, 0.15, 1)
+from kivymd.app import MDApp
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.button import MDRaisedButton
+from kivymd.uix.card import MDCard
+from kivymd.uix.label import MDIcon
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.selectioncontrol import MDCheckbox
+from kivymd.uix.textfield import MDTextField
 
+# ---------------------------------------------------------------------------
+# Цвета
+# ---------------------------------------------------------------------------
+TEXT = (0.10, 0.10, 0.10, 1)
+WHITE = (1, 1, 1, 1)
+ACCENT = (0.91, 0.45, 0.12, 1)
+GREEN = (0.13, 0.58, 0.24, 1)
+RED = (0.80, 0.20, 0.20, 1)
+GREY = (0.55, 0.55, 0.55, 1)
+CARD_BG = (1, 1, 1, 0.93)
+BAR_BG = (1, 1, 1, 0.97)
+
+# ---------------------------------------------------------------------------
+# Данные: звания, факты, справки
+# ---------------------------------------------------------------------------
 RANKS = [
     (0, "Уборщик лотка", "Только пришёл, ещё не осознал масштаб"),
     (21, "Разносчик корма", "Уже понял, кто тут босс"),
@@ -36,18 +64,18 @@ RANKS = [
     (1000, "Избранный Мурлыкой", "Кот приносит вам мышь. Добровольно."),
 ]
 
-CAT_FACTS = [
-    "Мурлыканье кота - 25-150 Гц, заживляет кости.",
+FACTS = [
+    "Мурлыканье кота - 25-150 Гц, такая частота связана с расслаблением.",
     "Кошки спят 12-16 часов в сутки.",
     "У кошки 32 мышцы в каждом ухе.",
     "Кошки не чувствуют сладкое.",
     "Нос кошки уникален, как отпечаток пальца.",
-    "Кошки мяукают только для людей.",
-    "Подушечки лап пахнут попкорном.",
+    "Кошки мяукают в основном для людей.",
+    "Подушечки лап у кошек могут пахнуть попкорном.",
     "Кошки видят в темноте в 6 раз лучше человека.",
 ]
 
-CLICKER_INFO = (
+CLICKER_HELP = (
     "ЧТО ТАКОЕ КЛИКЕР\n\n"
     "Кликер — маленькая коробочка-трещотка с резким щелчком. "
     "Стоит 100-300 руб в зоомагазине. Альтернатива: приложение-кликер "
@@ -72,6 +100,51 @@ CLICKER_INFO = (
     "Кликер только для тренировок."
 )
 
+STOP_SIGNALS = [
+    ("Кот уходит сам", "Больше не хочет участвовать"),
+    ("Хвост дёргается резко", "Раздражение, стресс"),
+    ("Уши прижаты", "Дискомфорт, страх"),
+    ("Кот вылизывается", "Признак стресса"),
+    ("Зрачки расширены", "Хочет избежать"),
+    ("Мяуканье с низкими нотами", "Предупреждение"),
+]
+
+REASONS = [
+    ("Ты торопишься", "Кот не понял шаг. Перескочил микрошаг.", "Откатись назад."),
+    ("Кот не голоден", "Сытый кот не работает.", "Тренируйся до кормления."),
+    ("Награда не ценная", "Обычный корм = ноль мотивации.", "Нужно особое лакомство."),
+    ("Долгая сессия", "Кошки теряют концентрацию.", "Сессия 2-3 мин."),
+    ("Кот не в настроении", "Кошки не работают по расписанию.", "Лови момент."),
+    ("Наказал за подход", "Зов = плохо.", "Неприятное делай сам, а не зови для этого."),
+]
+
+FIXES = [
+    ("Сидеть", ["Проверь мотивацию", "Веди медленнее", "Награждай за движение вниз"]),
+    ("Дай лапу", ["Кулак с лакомством", "Нос игнор, лапа клик", "Не хватай лапу сам"]),
+    ("Ко мне", ["Сократи дистанцию", "Клик за первый шаг", "Зов = праздник"]),
+    ("Лежать", ["Начни с Сидеть", "Веди по полу медленно", "Награждай за локти"]),
+    ("Зайка", ["Чуть выше головы", "Награждай за подъём", "Падает - ниже руку"]),
+    ("Кувырок", ["Отработай Лежать", "Веди по дуге медленно", "Награждай за поворот"]),
+]
+
+QUOTE = "Я не дрессирую кошек, я договариваюсь с ними - Ю. Куклачёв"
+PRINCIPLES = [
+    "Кошку нельзя заставить. Только мотивировать.",
+    "Кошка не обязана. Она делает, если видит выгоду.",
+    "Не получается - проблема в методе.",
+    "Наказание не работает. Только терпение.",
+]
+
+RULES = [
+    "Награда в течение 1-2 секунд",
+    "Сессия 2-5 минут, 2-3 раза в день",
+    "Занятия до еды, а не после",
+    "Никогда не наказывать",
+]
+
+# ---------------------------------------------------------------------------
+# Программа: 42 дня, 6 недель
+# ---------------------------------------------------------------------------
 PROGRAM = [
     {"day":1,"week":1,"level":"Контакт","title":"Клик = еда",
      "goal":"Кот понимает: клик = немедленная награда",
@@ -307,610 +380,779 @@ PROGRAM = [
      "success":"Вы — выпускник курса!"},
 ]
 
-DIAGNOSTICS_STOPS = [
-    ("Кот уходит сам", "Больше не хочет участвовать"),
-    ("Хвост дёргается резко", "Раздражение, стресс"),
-    ("Уши прижаты", "Дискомфорт, страх"),
-    ("Кот вылизывается", "Признак стресса"),
-    ("Зрачки расширены", "Хочет избежать"),
-    ("Мяуканье с низкими нотами", "Предупреждение"),
-]
-
-DIAGNOSTICS_REASONS = [
-    ("Ты торопишься, кот не понял шаг", "Перескочил микрошаг", "Откатись назад"),
-    ("Кот не голоден", "Сытый кот не работает", "Тренируйся до кормления"),
-    ("Награда не ценная", "Обычный корм = ноль мотивации", "Особое лакомство"),
-    ("Долгая сессия", "Теряют концентрацию", "Сессия 2-3 мин"),
-    ("Кот не в настроении", "Кошки не работают по расписанию", "Лови момент"),
-    ("Наказал за подход", "Зов = плохо", "Неприятное делай сам"),
-]
-
-DIAGNOSTICS_FIXES = {
-    "Сидеть": ["Проверь мотивацию", "Веди медленнее", "Награждай за движение вниз"],
-    "Дай лапу": ["Кулак с лакомством", "Нос игнор, лапа клик", "Не хватай лапу сам"],
-    "Ко мне": ["Сократи дистанцию", "Клик за первый шаг", "Зов = праздник"],
-    "Лежать": ["Начни с Сидеть", "Веди по полу медленно", "Награждай за локти"],
-    "Зайка": ["Чуть выше головы", "Награждай за подъём", "Падает - ниже руку"],
-    "Кувырок": ["Отработай Лежать", "Веди по дуге медленно", "Награждай за поворот"],
-}
-
-DIAGNOSTICS_PHILOSOPHY = [
-    "Я не дрессирую кошек, я договариваюсь с ними — Ю. Куклачёв",
-    "Кошку нельзя заставить. Только мотивировать.",
-    "Кошка не обязана. Она делает, если видит выгоду.",
-    "Не получается — проблема в методе.",
-    "Наказание не работает. Только терпение.",
-]
+# ---------------------------------------------------------------------------
+# Хранилище и состояние
+# ---------------------------------------------------------------------------
+STORE = None
+STATE = {}
 
 
-def load_state():
-    if STORE.exists("state"):
-        return STORE.get("state")
+def default_state():
+    """Возвращает словарь состояния со всеми полями по умолчанию."""
     return {
-        "cat_name": "", "start_date": str(date.today()),
-        "total_points": 0, "completed_days": [], "day_sessions": {},
-        "day_notes": {}, "streak": 0, "last_session_date": None,
-        "clicker_count": 0, "theme": "night",
+        "cat_name": "",
+        "points": 0,
+        "streak": 0,
+        "last_date": "",
+        "start_date": date.today().isoformat(),
+        "clicks": 0,
+        "done": {},
+        "sessions": {},
+        "notes": {},
     }
 
-def save_state(state):
-    STORE.put("state", **state)
+
+def load_state(store):
+    """Загружает состояние из JsonStore. Если ключа state нет - создаёт его."""
+    global STORE, STATE
+    STORE = store
+    defaults = default_state()
+    try:
+        if STORE.exists("state"):
+            data = dict(STORE.get("state"))
+        else:
+            data = {}
+    except Exception as exc:
+        print("Ошибка чтения хранилища:", exc)
+        data = {}
+    # Добавляем недостающие поля (на случай старой версии файла)
+    for key, value in defaults.items():
+        if key not in data:
+            data[key] = value
+    STATE = data
+    save_state()
+
+
+def save_state():
+    """Сохраняет состояние в JsonStore."""
+    try:
+        STORE.put("state", **STATE)
+    except Exception as exc:
+        print("Ошибка записи хранилища:", exc)
+
 
 def get_rank(points):
-    rank = RANKS[0][1]
-    for th, name, _ in RANKS:
-        if points >= th:
-            rank = name
-    return rank
+    """Возвращает (индекс, название, описание) текущего звания."""
+    index = 0
+    for i, rank in enumerate(RANKS):
+        if points >= rank[0]:
+            index = i
+    return index, RANKS[index][1], RANKS[index][2]
 
-def get_program_day(state):
+
+def get_program_day():
+    """Текущий день программы (1-42) по дате старта."""
     try:
-        start = datetime.strptime(state["start_date"], "%Y-%m-%d").date()
+        start = date.fromisoformat(STATE["start_date"])
     except Exception:
         start = date.today()
-    delta = (date.today() - start).days + 1
-    return max(1, min(delta, len(PROGRAM)))
-
-def get_day_info(num):
-    for d in PROGRAM:
-        if d["day"] == num:
-            return d
-    return PROGRAM[-1]
+    number = (date.today() - start).days + 1
+    return max(1, min(42, number))
 
 
-class TodayScreen(MDScreen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.scroll = MDScrollView()
-        self.box = MDBoxLayout(orientation="vertical", padding=dp(12),
-                               spacing=dp(10), size_hint_y=None)
+def get_day_info(day):
+    """Возвращает словарь с данными дня (1-42)."""
+    day = max(1, min(42, int(day)))
+    return PROGRAM[day - 1]
+
+
+def vibrate(ms=30):
+    """Короткая вибрация на Android. На десктопе молча ничего не делает."""
+    if platform != "android":
+        return
+    try:
+        from jnius import autoclass
+        python_activity = autoclass("org.kivy.android.PythonActivity")
+        context = autoclass("android.content.Context")
+        vibrator = python_activity.mActivity.getSystemService(context.VIBRATOR_SERVICE)
+        vibrator.vibrate(ms)
+    except Exception as exc:
+        print("Вибрация недоступна:", exc)
+
+
+# ---------------------------------------------------------------------------
+# Вспомогательные виджеты
+# ---------------------------------------------------------------------------
+def make_label(text, size=15, color=TEXT, bold=False, halign="left"):
+    """Текстовая метка с переносом по ширине и автоматической высотой."""
+    label = Label(
+        text=text,
+        font_size=sp(size),
+        color=color,
+        bold=bold,
+        halign=halign,
+        valign="top",
+        size_hint_y=None,
+    )
+    label.bind(width=lambda inst, w: setattr(inst, "text_size", (w, None)))
+    label.bind(texture_size=lambda inst, s: setattr(inst, "height", s[1] + dp(4)))
+    return label
+
+
+def make_card(color=CARD_BG):
+    """Карточка с адаптивной высотой."""
+    return MDCard(
+        orientation="vertical",
+        padding=dp(12),
+        spacing=dp(6),
+        size_hint_y=None,
+        adaptive_height=True,
+        md_bg_color=color,
+        radius=[dp(12)],
+    )
+
+
+def make_button(text, callback, color=ACCENT, height=48):
+    """Широкая кнопка MDRaisedButton."""
+    return MDRaisedButton(
+        text=text,
+        md_bg_color=color,
+        size_hint=(1, None),
+        height=dp(height),
+        on_release=callback,
+    )
+
+
+class ScrollScreen(MDScreen):
+    """Базовый экран: вертикальная прокрутка + контейнер self.box."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.scroll = ScrollView(do_scroll_x=False, bar_width=dp(3))
+        self.box = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            padding=dp(10),
+            spacing=dp(10),
+        )
         self.box.bind(minimum_height=self.box.setter("height"))
         self.scroll.add_widget(self.box)
         self.add_widget(self.scroll)
 
+    def on_pre_enter(self, *args):
+        self.refresh()
+
     def refresh(self):
         self.box.clear_widgets()
-        s = self.app.state
-        if not s["cat_name"]:
-            self.box.add_widget(MDLabel(
-                text="Настройте профиль кота на вкладке Профиль",
-                halign="center", bold=True,
-                theme_text_color="Custom", text_color=TC))
-            return
-
-        day_num = get_program_day(s)
-        day = get_day_info(day_num)
-        done = day_num in s["completed_days"]
-        status = "ВЫПОЛНЕНО" if done else "НЕ ВЫПОЛНЕНО"
-
-        self.box.add_widget(MDLabel(
-            text=f"ДЕНЬ {day_num} / {len(PROGRAM)}",
-            halign="center", bold=True,
-            theme_text_color="Custom", text_color=AC))
-        self.box.add_widget(MDLabel(
-            text=f"{day['level']} | Неделя {day['week']} | {status}",
-            halign="center", theme_text_color="Custom", text_color=TC))
-        self.box.add_widget(MDLabel(
-            text=day["title"], halign="center", bold=True,
-            theme_text_color="Custom", text_color=TC))
-
-        card = MDCard(orientation="vertical", padding=dp(12), spacing=dp(6),
-                      size_hint_y=None, radius=[dp(16)], elevation=2)
-        card.bind(minimum_height=card.setter("height"))
-        card.md_bg_color = CC
-
-        card.add_widget(MDLabel(
-            text=f"Цель: {day['goal']}",
-            theme_text_color="Custom", text_color=TC))
-        card.add_widget(MDLabel(
-            text=f"Сессий: {day['sessions']} по {day['minutes']}",
-            theme_text_color="Custom", text_color=TC))
-        card.add_widget(MDLabel(
-            text="ЧТО ДЕЛАТЬ:", bold=True,
-            theme_text_color="Custom", text_color=AC))
-        for i, step in enumerate(day["steps"], 1):
-            card.add_widget(MDLabel(
-                text=f"{i}. {step}", theme_text_color="Custom",
-                text_color=TC))
-        card.add_widget(MDLabel(
-            text=f"Критерий: {day['success']}", bold=True,
-            theme_text_color="Custom", text_color=(0.65, 0.89, 0.63, 1)))
-        self.box.add_widget(card)
-
-        self.box.add_widget(MDLabel(
-            text="Отметь сессии:", bold=True,
-            theme_text_color="Custom", text_color=AC))
-
-        sessions_done = s["day_sessions"].get(str(day_num), [])
-        for i in range(day["sessions"]):
-            row = MDBoxLayout(orientation="horizontal", size_hint_y=None,
-                              height=dp(40), spacing=dp(8))
-            cb = MDCheckbox(active=(i < len(sessions_done) and sessions_done[i]),
-                            size_hint=(None, None), size=(dp(40), dp(40)))
-            cb.bind(active=lambda inst, val, idx=i: self.app.toggle_session(idx, val))
-            row.add_widget(cb)
-            row.add_widget(MDLabel(
-                text=f"Сессия {i+1}", valign="middle",
-                theme_text_color="Custom", text_color=TC))
-            self.box.add_widget(row)
-
-        self.box.add_widget(MDLabel(
-            text="Заметка:", bold=True,
-            theme_text_color="Custom", text_color=AC))
-        note = s["day_notes"].get(str(day_num), "")
-        self.note_field = MDTextField(text=note, multiline=True,
-                                      hint_text="Как прошло?")
-        self.box.add_widget(self.note_field)
-
-        btn = MDRaisedButton(text="Сохранить заметку", pos_hint={"center_x": 0.5})
-        btn.bind(on_release=lambda x: self.app.save_note(self.note_field.text))
-        self.box.add_widget(btn)
 
 
-class ClickerScreen(MDScreen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        box = MDBoxLayout(orientation="vertical", padding=dp(12), spacing=dp(10))
-
-        box.add_widget(MDLabel(
-            text="КЛИКЕР", halign="center", bold=True,
-            theme_text_color="Custom", text_color=AC,
-            size_hint_y=None, height=dp(60)))
-
-        self.btn = MDRaisedButton(
-            text="КЛИК",
-            size_hint=(None, None), size=(dp(220), dp(120)),
-            pos_hint={"center_x": 0.5})
-        self.btn.bind(on_release=self.do_click)
-        box.add_widget(self.btn)
-
-        self.counter = MDLabel(
-            text="Всего кликов: 0", halign="center", bold=True,
-            theme_text_color="Custom", text_color=AC,
-            size_hint_y=None, height=dp(40))
-        box.add_widget(self.counter)
-
-        rst = MDRaisedButton(text="Сбросить", pos_hint={"center_x": 0.5})
-        rst.bind(on_release=self.reset_counter)
-        box.add_widget(rst)
-
-        scroll = MDScrollView()
-        info = MDLabel(
-            text=CLICKER_INFO, size_hint_y=None,
-            theme_text_color="Custom", text_color=TC)
-        info.bind(texture_size=lambda inst, val: setattr(inst, "height", val[1]))
-        scroll.add_widget(info)
-        box.add_widget(scroll)
-        self.add_widget(box)
+# ---------------------------------------------------------------------------
+# Экран «Сегодня»
+# ---------------------------------------------------------------------------
+class TodayScreen(ScrollScreen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.status_label = None
+        self.note_field = None
 
     def refresh(self):
-        self.counter.text = f"Всего кликов: {self.app.state['clicker_count']}"
+        app = MDApp.get_running_app()
+        self.box.clear_widgets()
+        day = get_program_day()
+        info = get_day_info(day)
+        key = str(day)
+
+        # Подсказка, если имя кота не задано
+        if not STATE["cat_name"].strip():
+            hint = make_card((1.0, 0.93, 0.80, 0.97))
+            hint.add_widget(make_label("Настройте профиль кота на вкладке Профиль", 15, bold=True))
+            hint.add_widget(make_button("Открыть профиль", lambda *a: app.switch("profile")))
+            self.box.add_widget(hint)
+
+        # Заголовок дня
+        head = make_card()
+        head.add_widget(make_label("ДЕНЬ %d | Неделя %d" % (day, info["week"]), 20, ACCENT, True))
+        head.add_widget(make_label(info["title"], 18, bold=True))
+        head.add_widget(make_label("Уровень: " + info["level"], 14, GREY))
+        self.status_label = make_label("", 16, bold=True)
+        head.add_widget(self.status_label)
+        self.box.add_widget(head)
+        self.update_status()
+
+        # Цель, шаги, критерий
+        body = make_card()
+        body.add_widget(make_label("Цель: " + info["goal"], 15))
+        body.add_widget(make_label("Сессий: %d по %s" % (info["sessions"], info["minutes"]), 15))
+        body.add_widget(make_label("ЧТО ДЕЛАТЬ:", 15, ACCENT, True))
+        for number, step in enumerate(info["steps"], 1):
+            body.add_widget(make_label("%d. %s" % (number, step), 15))
+        body.add_widget(make_label("Критерий: " + info["success"], 15, GREEN, True))
+        self.box.add_widget(body)
+
+        # Чекбоксы сессий
+        sess_card = make_card()
+        sess_card.add_widget(make_label("Отметь сессии:", 16, bold=True))
+        sessions = STATE["sessions"].get(key)
+        if not sessions or len(sessions) != info["sessions"]:
+            sessions = [False] * info["sessions"]
+        for index in range(info["sessions"]):
+            row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(48))
+            checkbox = MDCheckbox(
+                size_hint=(None, None),
+                size=(dp(48), dp(48)),
+                active=bool(sessions[index]),
+            )
+            checkbox.bind(
+                active=lambda inst, value, d=day, i=index: app.toggle_session(d, i, value)
+            )
+            row_label = Label(
+                text="Сессия %d (+5 баллов)" % (index + 1),
+                font_size=sp(15),
+                color=TEXT,
+                halign="left",
+                valign="middle",
+            )
+            row_label.bind(size=lambda inst, s: setattr(inst, "text_size", s))
+            row.add_widget(checkbox)
+            row.add_widget(row_label)
+            sess_card.add_widget(row)
+        self.box.add_widget(sess_card)
+
+        # Заметка
+        note_card = make_card()
+        note_card.add_widget(make_label("Заметка:", 16, bold=True))
+        self.note_field = MDTextField(
+            text=STATE["notes"].get(key, ""),
+            hint_text="Как прошло?",
+            multiline=True,
+            mode="rectangle",
+            size_hint_y=None,
+            height=dp(120),
+        )
+        note_card.add_widget(self.note_field)
+        note_card.add_widget(
+            make_button("Сохранить заметку", lambda *a: app.save_note(day, self.note_field.text))
+        )
+        self.box.add_widget(note_card)
+        self.box.add_widget(Widget(size_hint_y=None, height=dp(20)))
+
+    def update_status(self):
+        """Обновляет надпись ВЫПОЛНЕНО / НЕ ВЫПОЛНЕНО без пересборки экрана."""
+        if self.status_label is None:
+            return
+        done = STATE["done"].get(str(get_program_day()), False)
+        if done:
+            self.status_label.text = "ВЫПОЛНЕНО"
+            self.status_label.color = GREEN
+        else:
+            self.status_label.text = "НЕ ВЫПОЛНЕНО"
+            self.status_label.color = RED
+
+
+# ---------------------------------------------------------------------------
+# Экран «Кликер»
+# ---------------------------------------------------------------------------
+class ClickerScreen(MDScreen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.root_box = BoxLayout(orientation="vertical", padding=dp(10), spacing=dp(8))
+        self.add_widget(self.root_box)
+        self.counter_label = None
+
+    def on_pre_enter(self, *args):
+        self.refresh()
+
+    def refresh(self):
+        self.root_box.clear_widgets()
+
+        top = make_card()
+        top.add_widget(make_label("КЛИКЕР", 20, ACCENT, True, "center"))
+        self.counter_label = make_label("Всего кликов: %d" % STATE["clicks"], 18, bold=True, halign="center")
+        top.add_widget(self.counter_label)
+        top.add_widget(
+            MDRaisedButton(
+                text="КЛИК",
+                font_size=sp(30),
+                md_bg_color=ACCENT,
+                size_hint=(1, None),
+                height=dp(110),
+                on_release=self.do_click,
+            )
+        )
+        top.add_widget(make_button("Сбросить", self.reset_counter, GREY, 40))
+        self.root_box.add_widget(top)
+
+        # Прокручиваемая справка
+        scroll = ScrollView(do_scroll_x=False, bar_width=dp(3))
+        help_card = make_card()
+        help_card.add_widget(make_label(CLICKER_HELP, 14))
+        scroll.add_widget(help_card)
+        self.root_box.add_widget(scroll)
 
     def do_click(self, *args):
-        try:
-            from jnius import autoclass
-            PythonActivity = autoclass("org.kivy.android.PythonActivity")
-            Context = autoclass("android.content.Context")
-            activity = PythonActivity.mActivity
-            vibrator = activity.getSystemService(Context.VIBRATOR_SERVICE)
-            vibrator.vibrate(60)
-        except Exception:
-            pass
-        self.app.state["clicker_count"] += 1
-        save_state(self.app.state)
-        self.refresh()
+        STATE["clicks"] += 1
+        save_state()
+        vibrate(30)
+        if self.counter_label is not None:
+            self.counter_label.text = "Всего кликов: %d" % STATE["clicks"]
 
     def reset_counter(self, *args):
-        self.app.state["clicker_count"] = 0
-        save_state(self.app.state)
+        STATE["clicks"] = 0
+        save_state()
+        if self.counter_label is not None:
+            self.counter_label.text = "Всего кликов: 0"
+
+
+# ---------------------------------------------------------------------------
+# Экран «Программа»
+# ---------------------------------------------------------------------------
+class ProgramScreen(ScrollScreen):
+    def refresh(self):
+        app = MDApp.get_running_app()
+        self.box.clear_widgets()
+        today = get_program_day()
+        for week in range(1, 7):
+            header = make_card(ACCENT)
+            header.add_widget(make_label("НЕДЕЛЯ %d" % week, 16, WHITE, True))
+            self.box.add_widget(header)
+            for info in PROGRAM:
+                if info["week"] != week:
+                    continue
+                day = info["day"]
+                done = STATE["done"].get(str(day), False)
+                mark = "[X]" if done else "[ ]"
+                text = "%s  %d. %s" % (mark, day, info["title"])
+                if day == today:
+                    text += "  (СЕГОДНЯ)"
+                row = MDCard(
+                    orientation="horizontal",
+                    padding=dp(12),
+                    size_hint_y=None,
+                    height=dp(52),
+                    md_bg_color=CARD_BG,
+                    radius=[dp(10)],
+                    on_release=lambda inst, d=day: app.open_day(d),
+                )
+                row_label = Label(
+                    text=text,
+                    font_size=sp(15),
+                    color=GREEN if done else TEXT,
+                    bold=(day == today),
+                    halign="left",
+                    valign="middle",
+                )
+                row_label.bind(size=lambda inst, s: setattr(inst, "text_size", s))
+                row.add_widget(row_label)
+                self.box.add_widget(row)
+        self.box.add_widget(Widget(size_hint_y=None, height=dp(20)))
+
+
+# ---------------------------------------------------------------------------
+# Экран подробностей дня
+# ---------------------------------------------------------------------------
+class DayDetailScreen(ScrollScreen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.day = 1
+
+    def refresh(self):
+        app = MDApp.get_running_app()
+        self.box.clear_widgets()
+        info = get_day_info(self.day)
+        key = str(self.day)
+        done = STATE["done"].get(key, False)
+
+        self.box.add_widget(make_button("<- Назад", lambda *a: app.switch("program"), GREY, 44))
+
+        head = make_card()
+        head.add_widget(make_label("День %d | Неделя %d" % (self.day, info["week"]), 20, ACCENT, True))
+        head.add_widget(make_label(info["title"], 18, bold=True))
+        head.add_widget(make_label("Уровень: " + info["level"], 14, GREY))
+        head.add_widget(
+            make_label("ВЫПОЛНЕНО" if done else "НЕ ВЫПОЛНЕНО", 16, GREEN if done else RED, True)
+        )
+        self.box.add_widget(head)
+
+        body = make_card()
+        body.add_widget(make_label("Цель: " + info["goal"], 15))
+        body.add_widget(make_label("Сессий: %d по %s" % (info["sessions"], info["minutes"]), 15))
+        body.add_widget(make_label("ЧТО ДЕЛАТЬ:", 15, ACCENT, True))
+        for number, step in enumerate(info["steps"], 1):
+            body.add_widget(make_label("%d. %s" % (number, step), 15))
+        body.add_widget(make_label("Критерий: " + info["success"], 15, GREEN, True))
+        self.box.add_widget(body)
+
+        note = STATE["notes"].get(key, "").strip()
+        if note:
+            note_card = make_card()
+            note_card.add_widget(make_label("Заметка:", 15, bold=True))
+            note_card.add_widget(make_label(note, 14))
+            self.box.add_widget(note_card)
+        self.box.add_widget(Widget(size_hint_y=None, height=dp(20)))
+
+
+# ---------------------------------------------------------------------------
+# Экран «Звания»
+# ---------------------------------------------------------------------------
+class RewardsScreen(ScrollScreen):
+    def refresh(self):
+        self.box.clear_widgets()
+        points = STATE["points"]
+        current_index, current_name, current_desc = get_rank(points)
+
+        head = make_card()
+        head.add_widget(make_label("ВИТРИНА ЗВАНИЙ", 20, ACCENT, True))
+        head.add_widget(make_label("%d баллов" % points, 18, bold=True))
+        head.add_widget(make_label("Звание: " + current_name, 16, GREEN, True))
+        self.box.add_widget(head)
+
+        next_index = current_index + 1
+        for index, (threshold, name, desc) in enumerate(RANKS):
+            card = make_card()
+            if points >= threshold:
+                color = GREEN
+                mark = "[+]"
+                extra = "Получено при %d баллах" % threshold
+            elif index == next_index:
+                color = ACCENT
+                mark = "[>]"
+                extra = "Осталось %d баллов (при %d)" % (threshold - points, threshold)
+            else:
+                color = GREY
+                mark = "[−]"
+                extra = "При %d баллах (осталось %d)" % (threshold, threshold - points)
+            card.add_widget(make_label("%s %s" % (mark, name), 16, color, True))
+            card.add_widget(make_label(desc, 14, color))
+            card.add_widget(make_label(extra, 13, color))
+            self.box.add_widget(card)
+        self.box.add_widget(Widget(size_hint_y=None, height=dp(20)))
+
+
+# ---------------------------------------------------------------------------
+# Экран «Диагностика»
+# ---------------------------------------------------------------------------
+class DiagScreen(MDScreen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.root_box = BoxLayout(orientation="vertical", padding=dp(10), spacing=dp(8))
+        self.add_widget(self.root_box)
+        self.text_label = None
+        self.current = ""
+
+    def on_pre_enter(self, *args):
         self.refresh()
 
-
-class ProgramScreen(MDScreen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.scroll = MDScrollView()
-        self.box = MDBoxLayout(orientation="vertical", padding=dp(12),
-                               spacing=dp(4), size_hint_y=None)
-        self.box.bind(minimum_height=self.box.setter("height"))
-        self.scroll.add_widget(self.box)
-        self.add_widget(self.scroll)
-
     def refresh(self):
-        self.box.clear_widgets()
-        current = get_program_day(self.app.state)
-        last_week = None
+        self.root_box.clear_widgets()
 
-        for d in PROGRAM:
-            if d["week"] != last_week:
-                self.box.add_widget(MDLabel(
-                    text=f"НЕДЕЛЯ {d['week']} - {d['level']}",
-                    bold=True,
-                    theme_text_color="Custom", text_color=AC,
-                    size_hint_y=None, height=dp(32)))
-                last_week = d["week"]
+        top = make_card()
+        top.add_widget(make_label("ДИАГНОСТИКА", 20, ACCENT, True))
+        grid = GridLayout(cols=2, spacing=dp(8), size_hint_y=None, height=dp(104))
+        for title, key in (("Стоп", "stop"), ("Причины", "reasons"), ("Команды", "fixes"), ("Мудрость", "wisdom")):
+            grid.add_widget(
+                MDRaisedButton(
+                    text=title,
+                    md_bg_color=ACCENT,
+                    size_hint=(1, 1),
+                    on_release=lambda inst, k=key: self.show(k),
+                )
+            )
+        top.add_widget(grid)
+        self.root_box.add_widget(top)
 
-            done = d["day"] in self.app.state["completed_days"]
-            mark = "[X]" if done else "[ ]"
-            today_mark = " СЕГОДНЯ" if d["day"] == current else ""
+        scroll = ScrollView(do_scroll_x=False, bar_width=dp(3))
+        text_card = make_card()
+        self.text_label = make_label("Выбери раздел сверху", 15)
+        text_card.add_widget(self.text_label)
+        scroll.add_widget(text_card)
+        self.root_box.add_widget(scroll)
 
-            btn = MDRaisedButton(
-                text=f"{mark} День {d['day']}: {d['title']}{today_mark}",
-                size_hint_x=1, size_hint_y=None, height=dp(40))
-            btn.bind(on_release=lambda x, day=d: self.app.open_day(day))
-            self.box.add_widget(btn)
-
-
-class DayDetailScreen(MDScreen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.scroll = MDScrollView()
-        self.box = MDBoxLayout(orientation="vertical", padding=dp(12),
-                               spacing=dp(8), size_hint_y=None)
-        self.box.bind(minimum_height=self.box.setter("height"))
-        self.scroll.add_widget(self.box)
-        self.add_widget(self.scroll)
-
-    def show(self, day):
-        self.box.clear_widgets()
-        back = MDRaisedButton(text="<- Назад")
-        back.bind(on_release=lambda x: self.app.switch("program"))
-        self.box.add_widget(back)
-
-        self.box.add_widget(MDLabel(
-            text=f"День {day['day']}: {day['title']}",
-            halign="center", bold=True,
-            theme_text_color="Custom", text_color=AC))
-        self.box.add_widget(MDLabel(
-            text=f"{day['level']} | Неделя {day['week']}",
-            halign="center", theme_text_color="Custom", text_color=TC))
-
-        card = MDCard(orientation="vertical", padding=dp(12), spacing=dp(6),
-                      size_hint_y=None, radius=[dp(16)], elevation=2)
-        card.bind(minimum_height=card.setter("height"))
-        card.md_bg_color = CC
-
-        card.add_widget(MDLabel(
-            text=f"Цель: {day['goal']}",
-            theme_text_color="Custom", text_color=TC))
-        card.add_widget(MDLabel(
-            text=f"Сессий: {day['sessions']} по {day['minutes']}",
-            theme_text_color="Custom", text_color=TC))
-        card.add_widget(MDLabel(
-            text="ЧТО ДЕЛАТЬ:", bold=True,
-            theme_text_color="Custom", text_color=AC))
-        for i, step in enumerate(day["steps"], 1):
-            card.add_widget(MDLabel(
-                text=f"{i}. {step}", theme_text_color="Custom",
-                text_color=TC))
-        card.add_widget(MDLabel(
-            text=f"Критерий: {day['success']}", bold=True,
-            theme_text_color="Custom", text_color=(0.65, 0.89, 0.63, 1)))
-        self.box.add_widget(card)
-
-
-class RewardsScreen(MDScreen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.scroll = MDScrollView()
-        self.box = MDBoxLayout(orientation="vertical", padding=dp(12),
-                               spacing=dp(8), size_hint_y=None)
-        self.box.bind(minimum_height=self.box.setter("height"))
-        self.scroll.add_widget(self.box)
-        self.add_widget(self.scroll)
-
-    def refresh(self):
-        self.box.clear_widgets()
-        points = self.app.state["total_points"]
-        rank = get_rank(points)
-
-        self.box.add_widget(MDLabel(
-            text="ВИТРИНА ЗВАНИЙ", halign="center", bold=True,
-            theme_text_color="Custom", text_color=AC))
-        self.box.add_widget(MDLabel(
-            text=f"{points} баллов\n{rank}", halign="center",
-            theme_text_color="Custom", text_color=TC))
-
-        current_idx = 0
-        for i, (th, name, _) in enumerate(RANKS):
-            if points >= th:
-                current_idx = i
-
-        for i, (th, name, desc) in enumerate(RANKS):
-            card = MDCard(orientation="vertical", padding=dp(10),
-                          size_hint_y=None, radius=[dp(12)], elevation=2)
-            card.bind(minimum_height=card.setter("height"))
-            card.md_bg_color = CC
-
-            if points >= th:
-                icon, color = "[+]", (0.65, 0.89, 0.63, 1)
-                extra = f"Получено при {th} баллах"
-            elif i == current_idx + 1:
-                icon, color = "[>]", AC
-                extra = f"Осталось {th - points}"
-            else:
-                icon, color = "[-]", (0.42, 0.44, 0.52, 1)
-                extra = f"При {th} баллах"
-
-            card.add_widget(MDLabel(
-                text=f"{icon}  {name}", bold=True,
-                theme_text_color="Custom", text_color=color))
-            card.add_widget(MDLabel(
-                text=desc,
-                theme_text_color="Custom", text_color=TC))
-            card.add_widget(MDLabel(
-                text=extra,
-                theme_text_color="Custom", text_color=color))
-            self.box.add_widget(card)
-
-
-class DiagScreen(MDScreen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        box = MDBoxLayout(orientation="vertical", padding=dp(12), spacing=dp(8))
-
-        box.add_widget(MDLabel(
-            text="ДИАГНОСТИКА", halign="center", bold=True,
-            theme_text_color="Custom", text_color=AC,
-            size_hint_y=None, height=dp(40)))
-
-        row1 = MDBoxLayout(orientation="horizontal", size_hint_y=None,
-                           height=dp(40), spacing=dp(4))
-        for text, key in [("Стоп", "stops"), ("Причины", "reasons"),
-                          ("Команды", "commands"), ("Мудрость", "phil")]:
-            b = MDRaisedButton(text=text)
-            b.bind(on_release=lambda x, k=key: self.show(k))
-            row1.add_widget(b)
-        box.add_widget(row1)
-
-        self.scroll = MDScrollView()
-        self.out = MDLabel(
-            text="Выбери раздел сверху", size_hint_y=None,
-            theme_text_color="Custom", text_color=TC)
-        self.out.bind(texture_size=lambda inst, val: setattr(inst, "height", val[1]))
-        self.scroll.add_widget(self.out)
-        box.add_widget(self.scroll)
-        self.add_widget(box)
-
-    def refresh(self):
-        pass
+        if self.current:
+            self.show(self.current)
 
     def show(self, key):
-        if key == "stops":
+        self.current = key
+        if key == "stop":
             text = "СТОП-СИГНАЛЫ\n\n"
-            for sign, meaning in DIAGNOSTICS_STOPS:
-                text += f"! {sign}\n   -> {meaning}\n\n"
+            for title, meaning in STOP_SIGNALS:
+                text += "- %s: %s\n" % (title, meaning)
             text += "\nЗакончи сессию. Вернись позже."
         elif key == "reasons":
             text = "6 ПРИЧИН\n\n"
-            for i, (name, why, fix) in enumerate(DIAGNOSTICS_REASONS, 1):
-                text += f"{i}. {name}\n   {why}\n   + {fix}\n\n"
-        elif key == "commands":
+            for number, (cause, why, fix) in enumerate(REASONS, 1):
+                text += "%d. %s\n%s\nЧто делать: %s\n\n" % (number, cause, why, fix)
+        elif key == "fixes":
             text = "ИСПРАВЛЕНИЕ\n\n"
-            for cmd, fixes in DIAGNOSTICS_FIXES.items():
-                text += f"=== {cmd} ===\n"
-                for f in fixes:
-                    text += f"  - {f}\n"
+            for command, tips in FIXES:
+                text += "%s:\n" % command
+                for tip in tips:
+                    text += "  - %s\n" % tip
                 text += "\n"
-        elif key == "phil":
-            text = "ФИЛОСОФИЯ\n\n"
-            for q in DIAGNOSTICS_PHILOSOPHY:
-                text += f"- {q}\n\n"
         else:
-            text = "-"
-        self.out.text = text
+            text = "ФИЛОСОФИЯ\n\n" + QUOTE + "\n\n"
+            for number, principle in enumerate(PRINCIPLES, 1):
+                text += "%d. %s\n" % (number, principle)
+        if self.text_label is not None:
+            self.text_label.text = text.strip()
 
 
-class ProfileScreen(MDScreen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.scroll = MDScrollView()
-        self.box = MDBoxLayout(orientation="vertical", padding=dp(12),
-                               spacing=dp(10), size_hint_y=None)
-        self.box.bind(minimum_height=self.box.setter("height"))
-        self.scroll.add_widget(self.box)
-        self.add_widget(self.scroll)
+# ---------------------------------------------------------------------------
+# Экран «Профиль»
+# ---------------------------------------------------------------------------
+class ProfileScreen(ScrollScreen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.name_field = None
 
     def refresh(self):
+        app = MDApp.get_running_app()
         self.box.clear_widgets()
-        s = self.app.state
 
-        self.box.add_widget(MDLabel(
-            text="ПРОФИЛЬ", halign="center", bold=True,
-            theme_text_color="Custom", text_color=AC))
-
-        self.name_field = MDTextField(text=s["cat_name"], hint_text="Имя кота")
-        self.box.add_widget(self.name_field)
-
-        btn = MDRaisedButton(text="Сохранить", pos_hint={"center_x": 0.5})
-        btn.bind(on_release=lambda x: self.app.save_profile(self.name_field.text))
-        self.box.add_widget(btn)
-
-        card = MDCard(orientation="vertical", padding=dp(12),
-                      size_hint_y=None, radius=[dp(12)], elevation=2)
-        card.bind(minimum_height=card.setter("height"))
-        card.md_bg_color = CC
-        card.add_widget(MDLabel(
-            text="4 ПРАВИЛА", bold=True,
-            theme_text_color="Custom", text_color=AC))
-        for i, r in enumerate([
-            "Награда в течение 1-2 секунд",
-            "Сессия 2-5 минут, 2-3 раза в день",
-            "Занятия до еды, а не после",
-            "Никогда не наказывать",
-        ], 1):
-            card.add_widget(MDLabel(
-                text=f"{i}. {r}",
-                theme_text_color="Custom", text_color=TC))
+        card = make_card()
+        card.add_widget(make_label("ПРОФИЛЬ", 20, ACCENT, True))
+        if not STATE["cat_name"].strip():
+            card.add_widget(make_label("Введите имя кота и нажмите Сохранить.", 14, RED))
+        else:
+            card.add_widget(make_label("Профиль " + STATE["cat_name"], 15, GREEN, True))
+        self.name_field = MDTextField(
+            text=STATE["cat_name"],
+            hint_text="Имя кота",
+            mode="rectangle",
+            size_hint_y=None,
+            height=dp(56),
+        )
+        card.add_widget(self.name_field)
+        card.add_widget(make_button("Сохранить", lambda *a: app.save_profile(self.name_field.text)))
         self.box.add_widget(card)
 
+        rules = make_card()
+        rules.add_widget(make_label("4 ПРАВИЛА", 18, ACCENT, True))
+        for number, rule in enumerate(RULES, 1):
+            rules.add_widget(make_label("%d. %s" % (number, rule), 15))
+        self.box.add_widget(rules)
+        self.box.add_widget(Widget(size_hint_y=None, height=dp(20)))
 
+
+# ---------------------------------------------------------------------------
+# Кнопка нижней панели
+# ---------------------------------------------------------------------------
+class TabButton(ButtonBehavior, BoxLayout):
+    def __init__(self, icon, title, **kwargs):
+        super().__init__(orientation="vertical", padding=(0, dp(4)), **kwargs)
+        self.icon = MDIcon(
+            icon=icon,
+            halign="center",
+            font_size=sp(24),
+            theme_text_color="Custom",
+            text_color=GREY,
+            size_hint_y=0.6,
+        )
+        self.caption = Label(
+            text=title,
+            font_size=sp(10),
+            color=GREY,
+            halign="center",
+            valign="middle",
+            size_hint_y=0.4,
+        )
+        self.caption.bind(size=lambda inst, s: setattr(inst, "text_size", s))
+        self.add_widget(self.icon)
+        self.add_widget(self.caption)
+
+    def set_active(self, active):
+        color = ACCENT if active else GREY
+        self.icon.text_color = color
+        self.caption.color = color
+        self.caption.bold = active
+
+
+# ---------------------------------------------------------------------------
+# Главное приложение
+# ---------------------------------------------------------------------------
 class CatTrainingApp(MDApp):
-    tc = TC
-    ac = AC
-    cc = CC
+    TABS = [
+        ("today", "calendar-today", "Сегодня"),
+        ("clicker", "gesture-tap", "Кликер"),
+        ("program", "format-list-bulleted", "Программа"),
+        ("rewards", "trophy", "Звания"),
+        ("diag", "stethoscope", "Диагноз"),
+        ("profile", "account-circle", "Профиль"),
+    ]
 
     def build(self):
         self.title = "Cat Training Coach"
-        self.theme_cls.theme_style = "Dark"
-        self.state = load_state()
+        self.theme_cls.theme_style = "Light"
+        Window.clearcolor = (1.0, 0.97, 0.93, 1)
+        # Чтобы клавиатура не закрывала поле ввода
+        Window.softinput_mode = "below_target"
 
-        root_layer = FloatLayout()
+        # Хранилище в папке данных приложения
+        store_path = os.path.join(self.user_data_dir, "cat_training_data.json")
+        load_state(JsonStore(store_path))
 
-        self.bg_layer = FloatLayout()
-        try:
-            for i in range(6):
-                for j in range(10):
-                    cat = Image(
-                        source="cats_bg.png",
-                        size_hint=(None, None),
-                        size=(dp(90), dp(90)),
-                        pos=(i * dp(70) - dp(20), j * dp(90) - dp(20)),
-                        opacity=0.35,
-                    )
-                    self.bg_layer.add_widget(cat)
-            root_layer.add_widget(self.bg_layer)
-        except Exception:
-            pass
+        self.fact_active = False
+        self.tab_buttons = {}
 
-        self.top_label = MDLabel(
-            text="", size_hint_y=None, height=dp(36),
+        root = FloatLayout()
+        self.build_background(root)
+
+        main = BoxLayout(orientation="vertical", size_hint=(1, 1))
+
+        # Верхняя панель
+        top_bar = MDBoxLayout(
+            size_hint_y=None,
+            height=dp(56),
+            padding=(dp(8), dp(4)),
+            md_bg_color=ACCENT,
+        )
+        self.top_label = Label(
+            text="",
+            font_size=sp(13),
+            color=WHITE,
+            bold=True,
             halign="center",
-            theme_text_color="Custom", text_color=self.ac)
-        
-        self.bottom_nav = MDBottomNavigation()
+            valign="middle",
+        )
+        self.top_label.bind(size=lambda inst, s: setattr(inst, "text_size", s))
+        top_bar.add_widget(self.top_label)
+        main.add_widget(top_bar)
 
-        self.screens = {
-            "today": TodayScreen(name="today"),
-            "clicker": ClickerScreen(name="clicker"),
-            "program": ProgramScreen(name="program"),
-            "day_detail": DayDetailScreen(name="day_detail"),
-            "rewards": RewardsScreen(name="rewards"),
-            "diag": DiagScreen(name="diag"),
-            "profile": ProfileScreen(name="profile"),
-        }
-        for scr in self.screens.values():
-            scr.app = self
-            item = MDBottomNavigationItem(name=scr.name, text=scr.name.capitalize())
-            item.add_widget(scr)
-            self.bottom_nav.add_widget(item)
+        # Экраны
+        self.sm = ScreenManager(transition=NoTransition())
+        self.sm.add_widget(TodayScreen(name="today"))
+        self.sm.add_widget(ClickerScreen(name="clicker"))
+        self.sm.add_widget(ProgramScreen(name="program"))
+        self.sm.add_widget(DayDetailScreen(name="day_detail"))
+        self.sm.add_widget(RewardsScreen(name="rewards"))
+        self.sm.add_widget(DiagScreen(name="diag"))
+        self.sm.add_widget(ProfileScreen(name="profile"))
+        main.add_widget(self.sm)
 
-        main_box = MDBoxLayout(orientation="vertical")
-        main_box.add_widget(self.top_label)
-        main_box.add_widget(self.bottom_nav)
-        root_layer.add_widget(main_box)
+        # Нижняя панель: 6 равных вкладок
+        bottom_bar = MDBoxLayout(size_hint_y=None, height=dp(62), md_bg_color=BAR_BG)
+        for name, icon, title in self.TABS:
+            button = TabButton(icon, title)
+            button.bind(on_release=lambda inst, n=name: self.switch(n))
+            self.tab_buttons[name] = button
+            bottom_bar.add_widget(button)
+        main.add_widget(bottom_bar)
 
-        self.switch("today")
-        Clock.schedule_interval(self.update_fact, 30)
-        return root_layer
+        root.add_widget(main)
 
-    def switch(self, name):
-        self.bottom_nav.switch_tab(name)
-        if name in self.screens:
-            self.screens[name].refresh()
         self.update_top()
+        self.switch("today")
+        # Каждые 30 секунд показываем факт на 5 секунд
+        Clock.schedule_interval(self.update_fact, 30)
+        return root
+
+    def build_background(self, root):
+        """Фон: картинка cats_bg.png, размноженная сеткой 6x10."""
+        try:
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cats_bg.png")
+            if not os.path.exists(path):
+                print("Файл фона не найден:", path)
+                return
+            grid = GridLayout(cols=6, rows=10, size_hint=(1, 1))
+            for _ in range(60):
+                grid.add_widget(Image(source=path, opacity=0.35, fit_mode="fill"))
+            root.add_widget(grid)
+        except Exception as exc:
+            print("Не удалось загрузить фон:", exc)
+
+    # ----- Навигация -----
+    def switch(self, name):
+        """Переключает экран и подсвечивает вкладку."""
+        self.sm.current = name
+        active = "program" if name == "day_detail" else name
+        for tab_name, button in self.tab_buttons.items():
+            button.set_active(tab_name == active)
 
     def open_day(self, day):
-        self.screens["day_detail"].show(day)
-        self.bottom_nav.switch_tab("day_detail")
+        """Открывает подробности дня."""
+        screen = self.sm.get_screen("day_detail")
+        screen.day = day
+        self.switch("day_detail")
 
-    def update_top(self):
-        s = self.state
-        if s["cat_name"]:
-            rank = get_rank(s["total_points"])
-            self.top_label.text = (
-                f"{s['cat_name']} | {s['total_points']} б. | "
-                f"{rank} | Стрик {s['streak']}")
-        else:
-            self.top_label.text = "Настройте профиль кота"
-
-    def update_fact(self, dt):
-        s = self.state
-        if s["cat_name"]:
-            fact = random.choice(CAT_FACTS)
-            self.top_label.text = fact
-            Clock.schedule_once(self.restore_top, 5)
-
-    def restore_top(self, dt):
-        self.update_top()
-
-    def toggle_session(self, idx, value):
-        s = self.state
-        day_num = get_program_day(s)
-        key = str(day_num)
-        day = get_day_info(day_num)
-        sessions = s["day_sessions"].get(key, [])
-        while len(sessions) < day["sessions"]:
-            sessions.append(False)
-        if idx >= len(sessions) or sessions[idx] == value:
+    # ----- Верхняя панель -----
+    def update_top(self, *args):
+        """Показывает: имя кота | баллы | звание | стрик."""
+        if self.fact_active:
             return
-        sessions[idx] = value
-        s["day_sessions"][key] = sessions
+        name = STATE["cat_name"].strip()
+        if not name:
+            name = "Настройте профиль кота"
+        rank_name = get_rank(STATE["points"])[1]
+        self.top_label.text = "%s | %d б. | %s | Стрик %d" % (
+            name,
+            STATE["points"],
+            rank_name,
+            STATE["streak"],
+        )
 
-        delta = 5 if value else -5
-        s["total_points"] = max(0, s["total_points"] + delta)
+    def update_fact(self, dt=None):
+        """Подменяет статус случайным фактом на 5 секунд."""
+        self.fact_active = True
+        self.top_label.text = "Факт: " + random.choice(FACTS)
+        Clock.unschedule(self.end_fact)
+        Clock.schedule_once(self.end_fact, 5)
 
-        all_done = all(sessions[:day["sessions"]])
-        was_done = day_num in s["completed_days"]
-        if all_done and not was_done:
-            s["completed_days"].append(day_num)
-            s["total_points"] += 10
-        elif not all_done and was_done:
-            s["completed_days"].remove(day_num)
-
-        today = str(date.today())
-        if s["last_session_date"] != today:
-            try:
-                last = datetime.strptime(s["last_session_date"], "%Y-%m-%d").date()
-                diff = (date.today() - last).days
-                s["streak"] = s["streak"] + 1 if diff == 1 else 1
-            except Exception:
-                s["streak"] = 1
-            s["last_session_date"] = today
-
-        save_state(s)
+    def end_fact(self, dt=None):
+        self.fact_active = False
         self.update_top()
 
-    def save_note(self, text):
-        s = self.state
-        day_num = get_program_day(s)
-        s["day_notes"][str(day_num)] = text.strip()
-        save_state(s)
+    # ----- Действия -----
+    def update_streak(self):
+        """Обновляет стрик (дней подряд) при отметке сессии."""
+        today = date.today()
+        last = STATE["last_date"]
+        if last == today.isoformat():
+            return
+        if last == (today - timedelta(days=1)).isoformat():
+            STATE["streak"] += 1
+        else:
+            STATE["streak"] = 1
+        STATE["last_date"] = today.isoformat()
+
+    def toggle_session(self, day, index, value):
+        """Отметка/снятие сессии: +5 / -5 баллов, бонус +10 за весь день."""
+        key = str(day)
+        info = get_day_info(day)
+        sessions = STATE["sessions"].get(key)
+        if not sessions or len(sessions) != info["sessions"]:
+            sessions = [False] * info["sessions"]
+        if sessions[index] == value:
+            return
+        sessions[index] = value
+        STATE["sessions"][key] = sessions
+
+        if value:
+            STATE["points"] += 5
+            self.update_streak()
+            vibrate(30)
+        else:
+            STATE["points"] = max(0, STATE["points"] - 5)
+
+        was_done = STATE["done"].get(key, False)
+        all_done = all(sessions)
+        if all_done and not was_done:
+            STATE["points"] += 10
+            STATE["done"][key] = True
+        elif not all_done and was_done:
+            STATE["points"] = max(0, STATE["points"] - 10)
+            STATE["done"][key] = False
+
+        save_state()
+        self.update_top()
+        today_screen = self.sm.get_screen("today")
+        today_screen.update_status()
+
+    def save_note(self, day, text):
+        """Сохраняет заметку дня."""
+        STATE["notes"][str(day)] = text
+        save_state()
+        vibrate(20)
         self.top_label.text = "Заметка сохранена"
-        Clock.schedule_once(self.restore_top, 3)
+        self.fact_active = True
+        Clock.unschedule(self.end_fact)
+        Clock.schedule_once(self.end_fact, 2)
 
     def save_profile(self, name):
-        name = name.strip()
-        if not name:
-            return
-        s = self.state
-        if not s["cat_name"]:
-            s["start_date"] = str(date.today())
-        s["cat_name"] = name
-        save_state(s)
+        """Сохраняет имя кота."""
+        STATE["cat_name"] = name.strip()
+        save_state()
         self.update_top()
-        self.top_label.text = f"Профиль {name} сохранён"
-        Clock.schedule_once(self.restore_top, 3)
+        self.sm.get_screen("profile").refresh()
+        self.sm.get_screen("today").refresh()
 
 
 if __name__ == "__main__":
