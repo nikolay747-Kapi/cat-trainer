@@ -10,8 +10,10 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json,ttf
 version = 1.0
 
-# Зависимости (версии строго по ТЗ)
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,kivymd==1.2.0,pillow
+# Зависимости. pillow убран: приложению он не нужен (KivyMD использует его только в
+# палитре цветов), а его сборка тянет freetype с download.savannah.gnu.org,
+# который часто отвечает 502/504 и роняет сборку.
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,kivymd==1.2.0
 
 # Экран
 orientation = portrait
@@ -24,7 +26,7 @@ android.permissions = VIBRATE
 android.api = 33
 android.minapi = 24
 android.ndk = 25b
-android.archs = arm64-v8a, armeabi-v7a
+android.archs = arm64-v8a
 android.accept_sdk_license = True
 android.allow_backup = True
 
