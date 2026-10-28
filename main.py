@@ -11,10 +11,15 @@ Cat Training Coach - приложение для дрессировки кота
 
 import os
 import random
+import time
+import webbrowser
 from datetime import date, timedelta
+from urllib.parse import quote
 
+from kivy.animation import Animation
 from kivy.clock import Clock
 from kivy.core.window import Window
+from kivy.graphics import Color, Rectangle, RoundedRectangle
 from kivy.metrics import dp, sp
 from kivy.storage.jsonstore import JsonStore
 from kivy.uix.anchorlayout import AnchorLayout
@@ -382,6 +387,53 @@ PROGRAM = [
 ]
 
 # ---------------------------------------------------------------------------
+# Знакомства: примеры анкет (офлайн-версия, до подключения сервера)
+# ---------------------------------------------------------------------------
+DEMO_PETS = [
+    {"id": "demo1", "own": False, "demo": True, "name": "Мурзик", "kind": "Кот",
+     "breed": "Британская короткошёрстная", "age": 3, "city": "Москва",
+     "address": "Центральный район", "awards": "Звание: Дворецкий его Мурлычества",
+     "about": "Степенный джентльмен. Любит сидеть на подоконнике и смотреть на птиц."},
+    {"id": "demo2", "own": False, "demo": True, "name": "Симба", "kind": "Кот",
+     "breed": "Мейн-кун", "age": 2, "city": "Санкт-Петербург",
+     "address": "Василеостровский район", "awards": "Дал лапу с первого раза",
+     "about": "Большой и добрый. Знает команды Сидеть и Ко мне."},
+    {"id": "demo3", "own": False, "demo": True, "name": "Багира", "kind": "Кошка",
+     "breed": "Сфинкс", "age": 4, "city": "Казань",
+     "address": "Вахитовский район", "awards": "Звание: Массажист дивана",
+     "about": "Любит тепло и руки хозяйки. Мёрзнет даже летом."},
+    {"id": "demo4", "own": False, "demo": True, "name": "Барсик", "kind": "Кот",
+     "breed": "Сибирская", "age": 5, "city": "Екатеринбург",
+     "address": "Академический район", "awards": "Выпускник 42-дневной программы",
+     "about": "Пушистый философ. Кувырок получается через раз."},
+    {"id": "demo5", "own": False, "demo": True, "name": "Луна", "kind": "Кошка",
+     "breed": "Шотландская вислоухая", "age": 1, "city": "Новосибирск",
+     "address": "Центральный район", "awards": "Лучший котёнок месяца",
+     "about": "Игривая и любопытная. Обожает кликер."},
+    {"id": "demo6", "own": False, "demo": True, "name": "Рыжик", "kind": "Кот",
+     "breed": "Бенгальская", "age": 2, "city": "Краснодар",
+     "address": "Прикубанский округ", "awards": "Прыгает выше всех в доме",
+     "about": "Энергичный охотник на солнечных зайчиков."},
+    {"id": "demo7", "own": False, "demo": True, "name": "Снежок", "kind": "Кот",
+     "breed": "Персидская", "age": 6, "city": "Нижний Новгород",
+     "address": "Нижегородский район", "awards": "Звание: Верховный жрец Мурлыки",
+     "about": "Спокойный и ленивый. Главное в жизни - мягкая подушка."},
+    {"id": "demo8", "own": False, "demo": True, "name": "Феликс", "kind": "Кот",
+     "breed": "Русская голубая", "age": 3, "city": "Москва",
+     "address": "Южное Бутово", "awards": "Цепочка трюков 3 из 5",
+     "about": "Тихий и умный. Подходит на зов, если слышит клик."},
+]
+
+AVATAR_COLORS = [
+    (0.91, 0.45, 0.12, 1),
+    (0.20, 0.55, 0.75, 1),
+    (0.45, 0.62, 0.30, 1),
+    (0.70, 0.35, 0.60, 1),
+    (0.80, 0.55, 0.15, 1),
+    (0.35, 0.45, 0.70, 1),
+]
+
+# ---------------------------------------------------------------------------
 # Хранилище и состояние
 # ---------------------------------------------------------------------------
 STORE = None
@@ -400,6 +452,9 @@ def default_state():
         "done": {},
         "sessions": {},
         "notes": {},
+        "pets": [],
+        "likes": [],
+        "passed": [],
     }
 
 
@@ -471,10 +526,83 @@ def vibrate(ms=30):
         print("Вибрация недоступна:", exc)
 
 
+def age_text(years):
+    """Возраст по-русски: 1 год, 3 года, 5 лет."""
+    try:
+        years = int(years)
+    except Exception:
+        return "возраст не указан"
+    if years <= 0:
+        return "меньше года"
+    if years % 100 in (11, 12, 13, 14):
+        return "%d лет" % years
+    if years % 10 == 1:
+        return "%d год" % years
+    if years % 10 in (2, 3, 4):
+        return "%d года" % years
+    return "%d лет" % years
+
+
+def get_all_pets():
+    """Все известные анкеты: примеры + свои питомцы."""
+    return list(DEMO_PETS) + list(STATE["pets"])
+
+
+def find_pet(pet_id):
+    for pet in get_all_pets():
+        if pet["id"] == pet_id:
+            return pet
+    return None
+
+
+def pet_tag(pet):
+    """Пометка для списков: (пример) или (моя)."""
+    if pet.get("own"):
+        return " (моя)"
+    if pet.get("demo"):
+        return " (пример)"
+    return ""
+
+
+def pet_awards(pet):
+    """Текст наград. Для своих питомцев добавляется звание по тренировкам."""
+    parts = []
+    if pet.get("awards", "").strip():
+        parts.append(pet["awards"].strip())
+    if pet.get("own"):
+        parts.append("Звание по тренировкам: " + get_rank(STATE["points"])[1])
+    return "; ".join(parts) if parts else "Пока нет"
+
+
+def open_map(query):
+    """Открывает карту. На Android - приложение карт, на десктопе - браузер."""
+    query = query.strip()
+    if not query:
+        return False
+    if platform == "android":
+        try:
+            from jnius import autoclass
+            intent_cls = autoclass("android.content.Intent")
+            uri_cls = autoclass("android.net.Uri")
+            python_activity = autoclass("org.kivy.android.PythonActivity")
+            uri = uri_cls.parse("geo:0,0?q=" + uri_cls.encode(query))
+            python_activity.mActivity.startActivity(intent_cls(intent_cls.ACTION_VIEW, uri))
+            return True
+        except Exception as exc:
+            print("Не удалось открыть карту:", exc)
+            return False
+    try:
+        webbrowser.open("https://www.openstreetmap.org/search?query=" + quote(query))
+        return True
+    except Exception as exc:
+        print("Не удалось открыть карту:", exc)
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Вспомогательные виджеты
 # ---------------------------------------------------------------------------
-def make_label(text, size=15, color=TEXT, bold=False, halign="left"):
+def make_label(text, size=15, color=TEXT, bold=False, halign="left", max_lines=0):
     """Текстовая метка с переносом по ширине и автоматической высотой."""
     label = Label(
         text=text,
@@ -484,6 +612,7 @@ def make_label(text, size=15, color=TEXT, bold=False, halign="left"):
         halign=halign,
         valign="top",
         size_hint_y=None,
+        max_lines=max_lines,
     )
     label.bind(width=lambda inst, w: setattr(inst, "text_size", (w, None)))
     label.bind(texture_size=lambda inst, s: setattr(inst, "height", s[1] + dp(4)))
@@ -925,6 +1054,465 @@ class ProfileScreen(ScrollScreen):
 
 
 # ---------------------------------------------------------------------------
+# Знакомства: виджеты
+# ---------------------------------------------------------------------------
+class SegButton(ButtonBehavior, Label):
+    """Кнопка-сегмент для переключения режимов вкладки."""
+
+    def __init__(self, **kwargs):
+        super().__init__(font_size=sp(12), bold=True, color=TEXT, **kwargs)
+        with self.canvas.before:
+            self.bg_color = Color(0.85, 0.85, 0.85, 1)
+            self.bg_rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(8)])
+        self.bind(pos=self.update_rect, size=self.update_rect)
+
+    def update_rect(self, *args):
+        self.bg_rect.pos = self.pos
+        self.bg_rect.size = self.size
+
+    def set_active(self, active):
+        self.bg_color.rgba = ACCENT if active else (0.85, 0.85, 0.85, 1)
+        self.color = WHITE if active else TEXT
+
+
+class Avatar(FloatLayout):
+    """Заглушка вместо фото: цветной блок с первой буквой имени."""
+
+    def __init__(self, pet, **kwargs):
+        super().__init__(size_hint_y=None, height=dp(100), **kwargs)
+        index = sum(ord(ch) for ch in pet["id"]) % len(AVATAR_COLORS)
+        with self.canvas.before:
+            Color(*AVATAR_COLORS[index])
+            self.rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(10)])
+        self.bind(pos=self.update_rect, size=self.update_rect)
+        letter = pet["name"].strip()[:1].upper() or "?"
+        self.add_widget(Label(text=letter, font_size=sp(48), bold=True, color=WHITE,
+                              pos_hint={"center_x": 0.5, "center_y": 0.5}))
+
+    def update_rect(self, *args):
+        self.rect.pos = self.pos
+        self.rect.size = self.size
+
+
+class SwipeCard(MDCard):
+    """Карточка анкеты: тянется пальцем вправо (лайк) или влево (мимо)."""
+
+    def __init__(self, on_swipe, **kwargs):
+        super().__init__(
+            orientation="vertical",
+            padding=dp(12),
+            spacing=dp(4),
+            size_hint=(None, None),
+            md_bg_color=CARD_BG,
+            radius=[dp(16)],
+            **kwargs
+        )
+        self.on_swipe = on_swipe
+        self.base_x = 0
+        self.start_x = 0
+        self.busy = False
+
+    def on_touch_down(self, touch):
+        if self.busy or not self.collide_point(*touch.pos):
+            return False
+        touch.grab(self)
+        self.start_x = touch.x
+        return True
+
+    def on_touch_move(self, touch):
+        if touch.grab_current is not self:
+            return False
+        shift = touch.x - self.start_x
+        self.x = self.base_x + shift
+        if shift > dp(20):
+            self.md_bg_color = (0.84, 0.96, 0.84, 0.97)
+        elif shift < -dp(20):
+            self.md_bg_color = (0.99, 0.86, 0.86, 0.97)
+        else:
+            self.md_bg_color = CARD_BG
+        return True
+
+    def on_touch_up(self, touch):
+        if touch.grab_current is not self:
+            return False
+        touch.ungrab(self)
+        shift = self.x - self.base_x
+        if abs(shift) > self.width * 0.3:
+            self.fly(shift > 0)
+        else:
+            self.md_bg_color = CARD_BG
+            Animation(x=self.base_x, duration=0.15).start(self)
+        return True
+
+    def fly(self, liked):
+        """Улетает за край экрана и сообщает о решении."""
+        if self.busy:
+            return
+        self.busy = True
+        self.md_bg_color = (0.84, 0.96, 0.84, 0.97) if liked else (0.99, 0.86, 0.86, 0.97)
+        target = self.base_x + (Window.width if liked else -Window.width)
+        anim = Animation(x=target, opacity=0, duration=0.22)
+        anim.bind(on_complete=lambda *a: self.on_swipe(liked))
+        anim.start(self)
+
+
+# ---------------------------------------------------------------------------
+# Экран «Знакомства»
+# ---------------------------------------------------------------------------
+class MeetScreen(MDScreen):
+    MODES = [("swipe", "Анкеты"), ("faves", "Избранные"), ("geo", "Города"), ("mine", "Моя")]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.mode = "swipe"
+        self.geo_mode = "city"
+        self.form_open = False
+        self.form_fields = {}
+        self.area = None
+        self.card = None
+        self.current = None
+
+        self.root_box = BoxLayout(orientation="vertical", padding=dp(8), spacing=dp(6))
+        seg_bar = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(40), spacing=dp(6))
+        self.seg_buttons = {}
+        for key, title in self.MODES:
+            button = SegButton(text=title)
+            button.bind(on_release=lambda inst, k=key: self.set_mode(k))
+            self.seg_buttons[key] = button
+            seg_bar.add_widget(button)
+        self.content = BoxLayout(orientation="vertical", spacing=dp(6))
+        self.root_box.add_widget(seg_bar)
+        self.root_box.add_widget(self.content)
+        self.add_widget(self.root_box)
+
+    def on_pre_enter(self, *args):
+        self.set_mode(self.mode)
+
+    def refresh(self):
+        self.set_mode(self.mode)
+
+    def set_mode(self, mode):
+        self.mode = mode
+        for key, button in self.seg_buttons.items():
+            button.set_active(key == mode)
+        self.content.clear_widgets()
+        self.area = None
+        self.card = None
+        if mode == "swipe":
+            self.build_swipe()
+        elif mode == "faves":
+            self.build_faves()
+        elif mode == "geo":
+            self.build_geo()
+        else:
+            self.build_mine()
+
+    def scroll_box(self):
+        """Создаёт прокручиваемый контейнер внутри self.content."""
+        scroll = ScrollView(do_scroll_x=False, bar_width=dp(3))
+        box = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            padding=dp(2),
+            spacing=dp(8),
+        )
+        box.bind(minimum_height=box.setter("height"))
+        scroll.add_widget(box)
+        self.content.add_widget(scroll)
+        return box
+
+    # ----- Анкеты (свайп) -----
+    def get_deck(self):
+        seen = set(STATE["likes"]) | set(STATE["passed"])
+        return [pet for pet in DEMO_PETS if pet["id"] not in seen]
+
+    def build_swipe(self):
+        deck = self.get_deck()
+        if not deck:
+            box = self.scroll_box()
+            card = make_card()
+            card.add_widget(make_label("Анкеты закончились", 18, ACCENT, True))
+            card.add_widget(make_label("Новые анкеты появятся, когда подключим сервер. "
+                                       "Пока можно посмотреть заново.", 14))
+            card.add_widget(make_button("Показать заново", self.reset_deck))
+            box.add_widget(card)
+            return
+        self.current = deck[0]
+        info_card = make_card()
+        info_card.padding = dp(6)
+        info_card.add_widget(make_label("Тяните карточку вправо - нравится, влево - мимо. Осталось: %d" % len(deck),
+                                        13, TEXT, halign="center"))
+        self.content.add_widget(info_card)
+        self.area = FloatLayout()
+        self.area.bind(pos=self.place_card, size=self.place_card)
+        self.content.add_widget(self.area)
+
+        buttons = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(48), spacing=dp(8))
+        buttons.add_widget(MDRaisedButton(text="Мимо", md_bg_color=GREY, size_hint=(1, 1),
+                                          on_release=lambda *a: self.press(False)))
+        buttons.add_widget(MDRaisedButton(text="На карте", md_bg_color=(0.20, 0.55, 0.75, 1), size_hint=(1, 1),
+                                          on_release=lambda *a: self.show_on_map(self.current)))
+        buttons.add_widget(MDRaisedButton(text="Нравится", md_bg_color=GREEN, size_hint=(1, 1),
+                                          on_release=lambda *a: self.press(True)))
+        self.content.add_widget(buttons)
+        self.show_card(self.current)
+
+    def show_card(self, pet):
+        self.area.clear_widgets()
+        card = SwipeCard(self.on_swiped)
+        card.add_widget(Avatar(pet))
+        card.add_widget(make_label("%s, %s%s" % (pet["name"], age_text(pet["age"]), pet_tag(pet)), 22, bold=True))
+        card.add_widget(make_label("%s | %s" % (pet.get("kind", "Кот"), pet["breed"]), 15, ACCENT, True))
+        card.add_widget(make_label("Город: " + pet["city"], 15))
+        if pet.get("address"):
+            card.add_widget(make_label("Район: " + pet["address"], 14, GREY))
+        card.add_widget(make_label("Награды: " + pet_awards(pet), 14, GREEN, True, max_lines=3))
+        if pet.get("about"):
+            card.add_widget(make_label(pet["about"], 14, max_lines=4))
+        card.add_widget(Widget())
+        self.card = card
+        self.area.add_widget(card)
+        self.place_card()
+
+    def place_card(self, *args):
+        if self.card is None or self.area is None or self.card.busy:
+            return
+        self.card.size = (max(dp(100), self.area.width - dp(16)), max(dp(100), self.area.height - dp(8)))
+        self.card.base_x = self.area.x + dp(8)
+        self.card.pos = (self.card.base_x, self.area.y + dp(4))
+
+    def press(self, liked):
+        if self.card is not None:
+            self.card.fly(liked)
+
+    def on_swiped(self, liked):
+        pet = self.current
+        if pet is not None:
+            if liked:
+                if pet["id"] not in STATE["likes"]:
+                    STATE["likes"].append(pet["id"])
+                vibrate(20)
+            else:
+                if pet["id"] not in STATE["passed"]:
+                    STATE["passed"].append(pet["id"])
+            save_state()
+        self.set_mode("swipe")
+
+    def reset_deck(self, *args):
+        STATE["passed"] = []
+        STATE["likes"] = []
+        save_state()
+        self.set_mode("swipe")
+
+    def show_on_map(self, pet):
+        """Открывает карту по городу (и району, если указан)."""
+        if pet is None:
+            return
+        query = pet["city"]
+        if pet.get("address"):
+            query = pet["address"] + ", " + pet["city"]
+        if not open_map(query):
+            MDApp.get_running_app().flash("Не удалось открыть карту")
+
+    # ----- Избранные -----
+    def build_faves(self):
+        box = self.scroll_box()
+        liked = [find_pet(pet_id) for pet_id in STATE["likes"]]
+        liked = [pet for pet in liked if pet is not None]
+        head = make_card()
+        head.add_widget(make_label("ИЗБРАННЫЕ", 18, ACCENT, True))
+        if not liked:
+            head.add_widget(make_label("Пока пусто. Свайпните анкету вправо или нажмите Нравится.", 14))
+        box.add_widget(head)
+        for pet in liked:
+            card = make_card()
+            card.add_widget(make_label("%s, %s%s" % (pet["name"], age_text(pet["age"]), pet_tag(pet)), 16, bold=True))
+            card.add_widget(make_label("%s | %s" % (pet.get("kind", "Кот"), pet["breed"]), 14, ACCENT))
+            card.add_widget(make_label("Город: " + pet["city"], 14))
+            card.add_widget(make_label("Награды: " + pet_awards(pet), 13, GREEN))
+            row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(44), spacing=dp(8))
+            row.add_widget(MDRaisedButton(text="На карте", md_bg_color=(0.20, 0.55, 0.75, 1), size_hint=(1, 1),
+                                          on_release=lambda inst, p=pet: self.show_on_map(p)))
+            row.add_widget(MDRaisedButton(text="Убрать", md_bg_color=GREY, size_hint=(1, 1),
+                                          on_release=lambda inst, i=pet["id"]: self.remove_like(i)))
+            card.add_widget(row)
+            box.add_widget(card)
+        box.add_widget(Widget(size_hint_y=None, height=dp(20)))
+
+    def remove_like(self, pet_id):
+        if pet_id in STATE["likes"]:
+            STATE["likes"].remove(pet_id)
+        save_state()
+        self.set_mode("faves")
+
+    # ----- Города и породы -----
+    def set_geo_mode(self, mode):
+        self.geo_mode = mode
+        self.set_mode("geo")
+
+    def build_geo(self):
+        box = self.scroll_box()
+        pets = get_all_pets()
+        head = make_card()
+        head.add_widget(make_label("ГДЕ КТО ЖИВЁТ", 18, ACCENT, True))
+        cities = sorted(set(p["city"] for p in pets))
+        breeds = sorted(set(p["breed"] for p in pets))
+        head.add_widget(make_label("Анкет: %d | Городов: %d | Пород: %d" % (len(pets), len(cities), len(breeds)), 14))
+        row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(44), spacing=dp(8))
+        city_btn = MDRaisedButton(text="По городам", size_hint=(1, 1),
+                                  md_bg_color=ACCENT if self.geo_mode == "city" else GREY,
+                                  on_release=lambda *a: self.set_geo_mode("city"))
+        breed_btn = MDRaisedButton(text="По породам", size_hint=(1, 1),
+                                   md_bg_color=ACCENT if self.geo_mode == "breed" else GREY,
+                                   on_release=lambda *a: self.set_geo_mode("breed"))
+        row.add_widget(city_btn)
+        row.add_widget(breed_btn)
+        head.add_widget(row)
+        box.add_widget(head)
+
+        groups = {}
+        for pet in pets:
+            key = pet["city"] if self.geo_mode == "city" else pet["breed"]
+            groups.setdefault(key, []).append(pet)
+        for key in sorted(groups, key=lambda k: (-len(groups[k]), k)):
+            card = make_card()
+            card.add_widget(make_label("%s - %d" % (key, len(groups[key])), 16, ACCENT, True))
+            for pet in groups[key]:
+                if self.geo_mode == "city":
+                    line = "- %s%s: %s, %s" % (pet["name"], pet_tag(pet), pet["breed"], age_text(pet["age"]))
+                else:
+                    line = "- %s%s: %s, %s" % (pet["name"], pet_tag(pet), pet["city"], age_text(pet["age"]))
+                card.add_widget(make_label(line, 14))
+            if self.geo_mode == "city":
+                card.add_widget(MDRaisedButton(
+                    text="Город на карте", md_bg_color=(0.20, 0.55, 0.75, 1),
+                    size_hint=(1, None), height=dp(40),
+                    on_release=lambda inst, c=key: self.open_city(c)))
+            box.add_widget(card)
+        box.add_widget(Widget(size_hint_y=None, height=dp(20)))
+
+    def open_city(self, city):
+        if not open_map(city):
+            MDApp.get_running_app().flash("Не удалось открыть карту")
+
+    # ----- Моя анкета -----
+    def build_mine(self):
+        box = self.scroll_box()
+        note = make_card((1.0, 0.93, 0.80, 0.97))
+        note.add_widget(make_label("Анкеты хранятся только на этом телефоне. Указывайте район, "
+                                   "а не точный адрес дома: так безопаснее, особенно когда "
+                                   "появится общий сервер.", 13))
+        box.add_widget(note)
+
+        if not self.form_open:
+            box.add_widget(make_button("Добавить питомца", self.open_form))
+
+        if self.form_open:
+            box.add_widget(self.build_form())
+
+        mine = STATE["pets"]
+        if not mine and not self.form_open:
+            empty = make_card()
+            empty.add_widget(make_label("У вас пока нет анкет. Добавьте питомца.", 14))
+            box.add_widget(empty)
+        for pet in mine:
+            card = make_card()
+            card.add_widget(make_label("%s, %s" % (pet["name"], age_text(pet["age"])), 17, bold=True))
+            card.add_widget(make_label("%s | %s" % (pet.get("kind", "Кот"), pet.get("breed") or "порода не указана"),
+                                       14, ACCENT, True))
+            card.add_widget(make_label("Город: " + pet["city"], 14))
+            if pet.get("address"):
+                card.add_widget(make_label("Район/адрес: " + pet["address"], 13, GREY))
+            card.add_widget(make_label("Награды: " + pet_awards(pet), 13, GREEN))
+            if pet.get("about"):
+                card.add_widget(make_label(pet["about"], 13))
+            row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(44), spacing=dp(8))
+            row.add_widget(MDRaisedButton(text="На карте", md_bg_color=(0.20, 0.55, 0.75, 1), size_hint=(1, 1),
+                                          on_release=lambda inst, p=pet: self.show_on_map(p)))
+            row.add_widget(MDRaisedButton(text="Удалить", md_bg_color=RED, size_hint=(1, 1),
+                                          on_release=lambda inst, i=pet["id"]: self.delete_pet(i)))
+            card.add_widget(row)
+            box.add_widget(card)
+        box.add_widget(Widget(size_hint_y=None, height=dp(20)))
+
+    def open_form(self, *args):
+        self.form_open = True
+        self.set_mode("mine")
+
+    def close_form(self, *args):
+        self.form_open = False
+        self.set_mode("mine")
+
+    def build_form(self):
+        card = make_card()
+        card.add_widget(make_label("НОВЫЙ ПИТОМЕЦ", 16, ACCENT, True))
+        fields = [
+            ("name", "Имя", STATE["cat_name"] if not STATE["pets"] else ""),
+            ("kind", "Кто это (кот, кошка...)", "Кот"),
+            ("breed", "Порода", ""),
+            ("age", "Возраст (полных лет)", ""),
+            ("city", "Город", ""),
+            ("address", "Район или адрес (необязательно)", ""),
+            ("awards", "Награды (необязательно)", ""),
+            ("about", "О питомце (необязательно)", ""),
+        ]
+        self.form_fields = {}
+        for key, hint, default in fields:
+            field = MDTextField(
+                text=default,
+                hint_text=hint,
+                mode="rectangle",
+                size_hint_y=None,
+                height=dp(56),
+            )
+            if key == "age":
+                field.input_filter = "int"
+            self.form_fields[key] = field
+            card.add_widget(field)
+        card.add_widget(make_button("Сохранить анкету", self.save_pet))
+        card.add_widget(make_button("Отмена", self.close_form, GREY, 40))
+        return card
+
+    def save_pet(self, *args):
+        values = {key: field.text.strip() for key, field in self.form_fields.items()}
+        app = MDApp.get_running_app()
+        if not values["name"]:
+            app.flash("Укажите имя питомца")
+            return
+        if not values["city"]:
+            app.flash("Укажите город")
+            return
+        try:
+            age = max(0, min(40, int(values["age"] or 0)))
+        except ValueError:
+            age = 0
+        pet = {
+            "id": "m%d" % int(time.time() * 1000),
+            "own": True,
+            "demo": False,
+            "name": values["name"],
+            "kind": values["kind"] or "Кот",
+            "breed": values["breed"] or "Порода не указана",
+            "age": age,
+            "city": values["city"],
+            "address": values["address"],
+            "awards": values["awards"],
+            "about": values["about"],
+        }
+        STATE["pets"].append(pet)
+        save_state()
+        vibrate(20)
+        self.form_open = False
+        self.set_mode("mine")
+        app.flash("Анкета сохранена")
+
+    def delete_pet(self, pet_id):
+        STATE["pets"] = [p for p in STATE["pets"] if p["id"] != pet_id]
+        save_state()
+        self.set_mode("mine")
+
+
+# ---------------------------------------------------------------------------
 # Кнопка нижней панели
 # ---------------------------------------------------------------------------
 class TabButton(ButtonBehavior, BoxLayout):
@@ -942,7 +1530,7 @@ class TabButton(ButtonBehavior, BoxLayout):
         icon_box.add_widget(self.icon)
         self.caption = Label(
             text=title,
-            font_size=sp(10),
+            font_size=sp(9),
             color=GREY,
             halign="center",
             valign="middle",
@@ -966,9 +1554,10 @@ class CatTrainingApp(MDApp):
     TABS = [
         ("today", "calendar-today", "Сегодня"),
         ("clicker", "gesture-tap", "Кликер"),
-        ("program", "format-list-bulleted", "Программа"),
+        ("program", "format-list-bulleted", "План"),
         ("rewards", "trophy", "Звания"),
         ("diag", "stethoscope", "Диагноз"),
+        ("meet", "heart-multiple", "Знакомства"),
         ("profile", "account-circle", "Профиль"),
     ]
 
@@ -1018,6 +1607,7 @@ class CatTrainingApp(MDApp):
         self.sm.add_widget(DayDetailScreen(name="day_detail"))
         self.sm.add_widget(RewardsScreen(name="rewards"))
         self.sm.add_widget(DiagScreen(name="diag"))
+        self.sm.add_widget(MeetScreen(name="meet"))
         self.sm.add_widget(ProfileScreen(name="profile"))
         main.add_widget(self.sm)
 
@@ -1025,6 +1615,8 @@ class CatTrainingApp(MDApp):
         bottom_bar = MDBoxLayout(size_hint_y=None, height=dp(62), md_bg_color=BAR_BG)
         for name, icon, title in self.TABS:
             button = TabButton(icon, title)
+            if name == "meet":
+                button.size_hint_x = 1.4
             button.bind(on_release=lambda inst, n=name: self.switch(n))
             self.tab_buttons[name] = button
             bottom_bar.add_widget(button)
@@ -1093,6 +1685,13 @@ class CatTrainingApp(MDApp):
         self.fact_active = False
         self.update_top()
 
+    def flash(self, text, seconds=2):
+        """Короткое сообщение в верхней панели."""
+        self.fact_active = True
+        self.top_label.text = text
+        Clock.unschedule(self.end_fact)
+        Clock.schedule_once(self.end_fact, seconds)
+
     # ----- Действия -----
     def update_streak(self):
         """Обновляет стрик (дней подряд) при отметке сессии."""
@@ -1144,10 +1743,7 @@ class CatTrainingApp(MDApp):
         STATE["notes"][str(day)] = text
         save_state()
         vibrate(20)
-        self.top_label.text = "Заметка сохранена"
-        self.fact_active = True
-        Clock.unschedule(self.end_fact)
-        Clock.schedule_once(self.end_fact, 2)
+        self.flash("Заметка сохранена")
 
     def save_profile(self, name):
         """Сохраняет имя кота."""
